@@ -54,3 +54,6 @@ Backend: Python 3, Flask, SQLite3, Treys (Poker Evaluator)
 Frontend: HTML5, CSS3, JavaScript (Fetch API, Polling)
 
 Target Hardware: Raspberry Pi 4 (or any computer on the local network)
+
+-------------------------------------------------------------------------
+
