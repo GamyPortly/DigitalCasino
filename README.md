@@ -28,12 +28,14 @@ digitaal-casino/
     └── login.html           # Player authentication page
 ```
 **Requirements**
+
 Install Python 3 dependencies:
 ```text 
 pip install flask qrcode pillow treys werkzeug
 ```
 
 **Launching the Server**
+
 Run the Flask application:
 ```text
 python app.py
