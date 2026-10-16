@@ -175,7 +175,7 @@
     </div>
 
     <div id="cr_loop_zone" style="display:none;">
-      <div id="cr_multiplier" style="font-size:3.2em; font-weight:bold; margin:10px 0; color:#2ecc71;">0.25x</div>
+      <div id="cr_multiplier" style="font-size:3.2em; font-weight:bold; margin:10px 0; color:#2ecc71;">0.10x</div>
       <p id="cr_aftel" style="color:#f1c40f;"></p>
       <button id="cr_cashout_knop" style="background:#8e44ad; font-size:1.3em; padding:20px;" onclick="stuurCrashCashout()">Cash out</button>
       <p id="cr_auto_tekst" style="color:#aaa; font-size:0.9em;"></p>
@@ -405,11 +405,10 @@ let crashSync = null;      // { verstreken, ontvangen, groei, inzet, status, fas
 let crashTimers = [];
 
 function crashMultiplier() {
-  if (!crashSync) return 0.25;
-  const startMultiplier = crashSync.start_multiplier;
+  if (!crashSync) return 0.1;
   const t = crashSync.verstreken + (performance.now() - crashSync.ontvangen) / 1000;
-  if (t <= 0) return startMultiplier;
-  return Math.floor(startMultiplier * Math.exp(crashSync.groei * t) * 100) / 100;
+  if (t <= 0) return crashSync.start;
+  return Math.floor(crashSync.start * Math.exp(crashSync.groei * t) * 100) / 100;
 }
 
 function crashTik() {
@@ -755,8 +754,7 @@ async function ververs() {
 
       crashSync = {
         verstreken: cr.verstreken === null ? -1 : cr.verstreken, ontvangen: performance.now(),
-        groei: cr.groei, start_multiplier: cr.start_multiplier,
-        inzet: mijnCr.inzet, status: mijnCr.status, fase: cr.fase, auto: mijnCr.auto,
+        groei: cr.groei, start: cr.start, inzet: mijnCr.inzet, status: mijnCr.status, fase: cr.fase, auto: mijnCr.auto,
       };
 
       if (cr.fase === "inzetten" && mijnCr.status === "wacht") {

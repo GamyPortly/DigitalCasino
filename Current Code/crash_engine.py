@@ -1,6 +1,6 @@
 """Crash - engine voor het Digital Casino.
 
-Beide spelers zetten in. Daarna begint een vermenigvuldiger te stijgen vanaf 0.25x.
+Beide spelers zetten in. Daarna begint een vermenigvuldiger te stijgen vanaf 1.00x.
 Je moet uitbetalen (cash out) voordat de multiplier 'crasht'. Wie te laat is, verliest de inzet.
 Het crashpunt wordt vooraf bepaald, maar blijft geheim tot het gebeurt.
 
@@ -12,22 +12,28 @@ import math
 import random
 import time
 
-GROEI = 0.25          # multiplier = e^(GROEI * seconden)
-START_MULTIPLIER = 0.25
+START_MULTIPLIER = 0.10  # de multiplier begint hier (onder 1.00x verlies je nog geld)
+GROEI = 0.46          # multiplier = START * e^(GROEI * seconden)  (1.00x na ~5s, 50x na ~13s)
 AFTELLEN = 3.0        # seconden tussen de laatste inzet en de start
 MAX_CRASH = 50.0      # hoogst mogelijke crashpunt
+MIN_CRASH = 0.80      # laagst mogelijke crashpunt
 HUIS_MARGE = 0.97     # 3% huisvoordeel
 
 
 def nieuw_crashpunt():
+    """Kans (1 - HUIS_MARGE) = 3% op een 'vroege crash' tussen MIN_CRASH en 1.00x.
+    In alle andere gevallen geldt de standaardformule, die altijd minstens 1.00x geeft.
+    Het huisvoordeel voor cash-outs vanaf 1.00x blijft daardoor precies 3%."""
     r = random.random()
+    if r < 1 - HUIS_MARGE:
+        return round(random.uniform(MIN_CRASH, 0.99), 2)
     punt = math.floor(HUIS_MARGE * 100 / (1 - r)) / 100
-    return max(0.50, min(MAX_CRASH, punt))
+    return max(1.00, min(MAX_CRASH, punt))
 
 
 def tijd_voor_multiplier(m):
     """Na hoeveel seconden (sinds de start) bereikt de multiplier waarde m."""
-    return math.log(m / START_MULTIPLIER) / GROEI
+    return math.log(m / START_MULTIPLIER) / GROEI if m > START_MULTIPLIER else 0.0
 
 
 def multiplier_op(state, nu):
