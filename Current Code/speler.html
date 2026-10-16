@@ -22,6 +22,9 @@
 </style>
 </head>
 <body>
+  <div id="donatie_banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:100; background:#27ae60; color:white; padding:14px; font-weight:bold;">
+    🎁 Je had geen chips meer. Het casino schenkt je 1000 chips!
+  </div>
   <div style="display:flex; justify-content:space-between; align-items:center; max-width:280px; margin:0 auto 10px;">
     <span id="ingelogd_als" style="color:#aaa; font-size:0.9em;"></span>
     <button class="klein-knop" style="width:auto; margin:0;" onclick="veiligAfsluiten()">Afsluiten</button>
@@ -156,6 +159,33 @@
     <div id="rt_uitslag_fase" style="display:none;">
       <p id="rt_resultaat_tekst" style="font-size:1.2em; color:#f1c40f;"></p>
       <button onclick="volgendeHand()">Volgende Ronde</button>
+    </div>
+  </div>
+
+  <!-- CRASH -->
+  <div id="crash_zone" style="display:none;">
+    <h3>🚀 Crash 🚀</h3>
+    <p>Chips: <b id="cr_chips">0</b> | inzet: <b id="cr_inzet">0</b></p>
+
+    <div id="cr_inzet_zone" style="display:none;">
+      <p>Hoeveel wil je inzetten?</p>
+      <input type="number" id="cr_bedrag" placeholder="bedrag" value="20">
+      <input type="number" id="cr_auto" placeholder="Auto cash-out (bv. 2.5) - optioneel" step="0.1" min="1.01">
+      <button style="background:#27ae60;" onclick="stuurCrashInzet()">Inzetten</button>
+    </div>
+
+    <div id="cr_loop_zone" style="display:none;">
+      <div id="cr_multiplier" style="font-size:3.2em; font-weight:bold; margin:10px 0; color:#2ecc71;">1.00x</div>
+      <p id="cr_aftel" style="color:#f1c40f;"></p>
+      <button id="cr_cashout_knop" style="background:#8e44ad; font-size:1.3em; padding:20px;" onclick="stuurCrashCashout()">Cash out</button>
+      <p id="cr_auto_tekst" style="color:#aaa; font-size:0.9em;"></p>
+    </div>
+
+    <div id="cr_klaar_zone" style="display:none;">
+      <div id="cr_klaar_multiplier" style="font-size:2.4em; font-weight:bold; margin:10px 0;"></div>
+      <p id="cr_resultaat_tekst" style="color:#f1c40f; font-size:1.2em;"></p>
+      <p id="cr_wacht_tekst" style="color:#aaa;"></p>
+      <button id="cr_volgende_knop" onclick="volgendeHand()">Volgende ronde</button>
     </div>
   </div>
 
@@ -370,6 +400,71 @@ async function bevestigRouletteKlaar() {
   document.getElementById("rt_inzet_status").textContent = "Inzetten bevestigd! Wachten op de draai...";
 }
 
+/* CRASH */
+let crashSync = null;      // { verstreken, ontvangen, groei, inzet, status, fase, auto }
+let crashTimers = [];
+
+function crashMultiplier() {
+  if (!crashSync) return 1;
+  const t = crashSync.verstreken + (performance.now() - crashSync.ontvangen) / 1000;
+  if (t <= 0) return 1;
+  return Math.floor(Math.exp(crashSync.groei * t) * 100) / 100;
+}
+
+function crashTik() {
+  if (!crashSync || crashSync.fase !== "lopend") return;
+  const t = crashSync.verstreken + (performance.now() - crashSync.ontvangen) / 1000;
+  const m = crashMultiplier();
+  const multEl = document.getElementById("cr_multiplier");
+  const knop = document.getElementById("cr_cashout_knop");
+  const afteltEl = document.getElementById("cr_aftel");
+  if (!multEl) return;
+  multEl.textContent = m.toFixed(2) + "x";
+  if (t < 0) {
+    afteltEl.textContent = `Start over ${Math.ceil(-t)}...`;
+    knop.disabled = true;
+    knop.textContent = "Cash out";
+  } else {
+    afteltEl.textContent = "";
+    const actief = crashSync.status === "spelen";
+    knop.disabled = !actief;
+    knop.textContent = actief ? `Cash out (${Math.floor(crashSync.inzet * m)})` : "Uitbetaald";
+  }
+}
+
+function zetCrashLus(aan) {
+  if (aan && crashTimers.length === 0) {
+    crashTimers.push(setInterval(crashTik, 60));
+    crashTimers.push(setInterval(ververs, 250)); // snel pollen zodat de crash op tijd zichtbaar is
+  } else if (!aan && crashTimers.length) {
+    crashTimers.forEach(clearInterval);
+    crashTimers = [];
+  }
+}
+
+async function stuurCrashInzet() {
+  const bedrag = parseInt(document.getElementById("cr_bedrag").value);
+  const auto = document.getElementById("cr_auto").value;
+  if (!bedrag || bedrag <= 0) return alert("Vul een geldig bedrag in!");
+  const res = await fetch("/crash_inzet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, bedrag: bedrag, auto: auto === "" ? null : parseFloat(auto) })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+async function stuurCrashCashout() {
+  const res = await fetch("/crash_cashout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
 /* RIDE THE BUS */
 let rbHandtekening = "";
 
@@ -416,6 +511,12 @@ async function ververs() {
     if (!res.ok) return;
     const data = await res.json();
     const mij = data.spelers[SPELER_ID];
+    if (mij.donatie) {
+      const banner = document.getElementById("donatie_banner");
+      banner.style.display = "block";
+      setTimeout(() => { banner.style.display = "none"; }, 7000);
+    }
+    if (data.fase !== "crash" || !data.crash || data.crash.fase !== "lopend") zetCrashLus(false);
 
     document.getElementById("ingelogd_als").textContent = mij.ingelogd_als ? "ingelogd als " + mij.ingelogd_als : "";
 
@@ -426,6 +527,7 @@ async function ververs() {
     document.getElementById("liarsbar_zone").style.display = "none";
     document.getElementById("roulette_zone").style.display = "none";
     document.getElementById("ridebus_zone").style.display = "none";
+    document.getElementById("crash_zone").style.display = "none";
     document.getElementById("showdown_zone").style.display = "none";
 
     // 1. WACHTEN
@@ -634,7 +736,55 @@ async function ververs() {
       return;
     }
 
-    // 7. POKER
+    // 7. CRASH
+    if (data.fase === "crash" && data.crash) {
+      document.getElementById("crash_zone").style.display = "block";
+      const cr = data.crash;
+      const mijnCr = cr.spelers[SPELER_ID];
+
+      document.getElementById("cr_chips").textContent = mij.chips;
+      document.getElementById("cr_inzet").textContent = mijnCr.inzet;
+
+      const inzetZone = document.getElementById("cr_inzet_zone");
+      const loopZone = document.getElementById("cr_loop_zone");
+      const klaarZone = document.getElementById("cr_klaar_zone");
+      inzetZone.style.display = "none";
+      loopZone.style.display = "none";
+      klaarZone.style.display = "none";
+
+      crashSync = {
+        verstreken: cr.verstreken === null ? -1 : cr.verstreken, ontvangen: performance.now(),
+        groei: cr.groei, inzet: mijnCr.inzet, status: mijnCr.status, fase: cr.fase, auto: mijnCr.auto,
+      };
+
+      if (cr.fase === "inzetten" && mijnCr.status === "wacht") {
+        inzetZone.style.display = "block";
+      } else if (cr.fase === "inzetten") {
+        klaarZone.style.display = "block";
+        document.getElementById("cr_klaar_multiplier").textContent = "";
+        document.getElementById("cr_resultaat_tekst").textContent = "Inzet geplaatst.";
+        document.getElementById("cr_wacht_tekst").textContent = "Wachten op de andere speler...";
+        document.getElementById("cr_volgende_knop").style.display = "none";
+      } else if (cr.fase === "lopend") {
+        loopZone.style.display = "block";
+        document.getElementById("cr_auto_tekst").textContent =
+          mijnCr.auto ? `Automatische cash-out op ${Number(mijnCr.auto).toFixed(2)}x` : "";
+        zetCrashLus(true);
+        crashTik();
+        if (mijnCr.status === "uitbetaald") {
+          document.getElementById("cr_auto_tekst").textContent = mijnCr.resultaat;
+        }
+      } else if (cr.fase === "afgelopen") {
+        klaarZone.style.display = "block";
+        document.getElementById("cr_klaar_multiplier").textContent = "💥 " + Number(cr.crash_punt).toFixed(2) + "x";
+        document.getElementById("cr_resultaat_tekst").textContent = mijnCr.resultaat || "";
+        document.getElementById("cr_wacht_tekst").textContent = "";
+        document.getElementById("cr_volgende_knop").style.display = "block";
+      }
+      return;
+    }
+
+    // 8. POKER
     if (["preflop", "flop", "turn", "river"].includes(data.fase)) {
       document.getElementById("spel_zone").style.display = "block";
       const handEl = document.getElementById("mijn_hand");

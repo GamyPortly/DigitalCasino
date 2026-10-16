@@ -115,6 +115,15 @@
     <div class="spelers-rij" id="rb_spelers"></div>
   </div>
 
+  <!-- CRASH SCHERM -->
+  <div id="crash_zone" style="display:none;">
+    <h2>🚀 Crash 🚀</h2>
+    <p id="cr_fase_tekst" style="color:#f1c40f; font-size:1.2em;"></p>
+    <div id="cr_grote_multiplier" style="font-size:4.5em; font-weight:bold; color:#2ecc71;">1.00x</div>
+    <canvas id="cr_canvas" width="640" height="260" style="background:#2a2a2a; border:1px solid #555; border-radius:8px; max-width:95%;"></canvas>
+    <div class="spelers-rij" id="cr_spelers"></div>
+  </div>
+
   <div id="wintekst" style="font-size: 1.4em; margin-top: 20px; color: #2ecc71; font-weight: bold;"></div>
   <p id="startbericht" style="font-size:1.2em; margin-top:20px; color:#f1c40f;"></p>
 
@@ -127,6 +136,60 @@ function verbergAlles() {
   document.getElementById("liarsbar_zone").style.display = "none";
   document.getElementById("roulette_zone").style.display = "none";
   document.getElementById("ridebus_zone").style.display = "none";
+  document.getElementById("crash_zone").style.display = "none";
+}
+
+/* CRASH: lokale animatie tussen de polls door */
+let crashSync = null;
+let crashTimers = [];
+
+function crashT() {
+  return crashSync.verstreken + (performance.now() - crashSync.ontvangen) / 1000;
+}
+
+function crashTekenen() {
+  if (!crashSync) return;
+  const canvas = document.getElementById("cr_canvas");
+  const multEl = document.getElementById("cr_grote_multiplier");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const g = crashSync.groei;
+
+  let t, m, gecrasht = false;
+  if (crashSync.fase === "afgelopen") {
+    t = crashSync.crash_verstreken; m = crashSync.crash_punt; gecrasht = true;
+  } else if (crashSync.fase === "lopend") {
+    t = crashT(); m = t > 0 ? Math.floor(Math.exp(g * t) * 100) / 100 : 1;
+  } else { t = 0; m = 1; }
+
+  multEl.textContent = m.toFixed(2) + "x";
+  multEl.style.color = gecrasht ? "#e74c3c" : "#2ecc71";
+
+  ctx.clearRect(0, 0, W, H);
+  const tMax = Math.max(10, t * 1.1);
+  const mMax = Math.max(2, m * 1.15);
+  ctx.strokeStyle = gecrasht ? "#e74c3c" : "#2ecc71";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  const stappen = 120;
+  for (let i = 0; i <= stappen; i++) {
+    const ti = Math.max(0, t) * i / stappen;
+    const x = (ti / tMax) * (W - 20) + 10;
+    const y = H - 10 - ((Math.exp(g * ti) - 1) / (mMax - 1)) * (H - 20);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+function zetCrashLus(aan) {
+  if (aan && crashTimers.length === 0) {
+    crashTimers.push(setInterval(crashTekenen, 60));
+    crashTimers.push(setInterval(ververs, 250));
+  } else if (!aan && crashTimers.length) {
+    crashTimers.forEach(clearInterval);
+    crashTimers = [];
+  }
 }
 
 function rbKaartHtml(k) {
@@ -139,6 +202,7 @@ async function ververs() {
     const res = await fetch("/status");
     const data = await res.json();
 
+    if (data.fase !== "crash" || !data.crash || data.crash.fase !== "lopend") zetCrashLus(false);
     const s1 = data.spelers[1];
     const s2 = data.spelers[2];
 
@@ -371,6 +435,47 @@ async function ververs() {
       }
       document.getElementById("rb_ladder").innerHTML =
         "Uitbetaling: " + rb.vragen.map((v, i) => `${v} <b>${rb.multipliers[i]}x</b>`).join(" • ");
+      return;
+    }
+
+    // 8. CRASH
+    if (data.fase === "crash" && data.crash) {
+      verbergAlles();
+      document.getElementById("crash_zone").style.display = "block";
+      const cr = data.crash;
+
+      crashSync = {
+        fase: cr.fase, groei: cr.groei,
+        verstreken: cr.verstreken === null ? -1 : cr.verstreken, ontvangen: performance.now(),
+        crash_punt: cr.crash_punt, crash_verstreken: cr.crash_verstreken,
+      };
+
+      let fasetekst = "";
+      if (cr.fase === "inzetten") fasetekst = "Spelers zijn aan het inzetten...";
+      else if (cr.fase === "lopend") fasetekst = cr.verstreken < 0 ? `Start over ${Math.ceil(-cr.verstreken)}...` : "Cash out voor het crasht!";
+      else fasetekst = "💥 CRASH! 💥";
+      document.getElementById("cr_fase_tekst").textContent = fasetekst;
+
+      if (cr.fase === "lopend") zetCrashLus(true);
+      crashTekenen();
+
+      const spelersEl = document.getElementById("cr_spelers");
+      spelersEl.innerHTML = "";
+      for (const pid of [1, 2]) {
+        const sp = cr.spelers[pid];
+        let statusTekst = "";
+        if (sp.status === "uitbetaald") statusTekst = `<p style="color:#2ecc71;"><b>Cash out bij ${sp.uitbetaald_bij.toFixed(2)}x (${sp.winst} chips)</b></p>`;
+        else if (sp.status === "verloren") statusTekst = `<p style="color:#e74c3c;"><b>Gecrasht, ${sp.inzet} chips verloren</b></p>`;
+        else if (sp.status === "spelen") statusTekst = `<p style="color:#f1c40f;"><b>Nog in het spel...</b></p>`;
+        else if (sp.status === "ingezet") statusTekst = `<p style="color:#aaa;">Klaar</p>`;
+        spelersEl.innerHTML += `
+          <div class="speler-kaart ${sp.status === 'spelen' ? 'aan_de_beurt' : ''}">
+            <h3>${sp.ingelogd_als || sp.naam}</h3>
+            <p>Inzet: <b>${sp.inzet}</b></p>
+            <p>Chips: <b>${sp.chips}</b></p>
+            ${statusTekst}
+          </div>`;
+      }
       return;
     }
 

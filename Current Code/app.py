@@ -12,6 +12,7 @@ import paardenrace_engine as pr
 import liarsbar_engine as lb
 import roulette_engine as rt
 import ridebus_engine as rb
+import crash_engine as cr
 import database as db
 
 app = Flask(__name__)
@@ -26,6 +27,7 @@ paardenrace_state = pr.nieuw_spel()
 liarsbar_state = lb.nieuw_spel()
 roulette_state = rt.nieuw_spel()
 ridebus_state = rb.nieuw_spel()
+crash_state = cr.nieuw_spel()
 
 BESCHIKBARE_SPELLEN = {
     "poker": {"naam": "Poker (Texas Hold'em)", "beschikbaar": True},
@@ -34,6 +36,7 @@ BESCHIKBARE_SPELLEN = {
     "liarsbar": {"naam": "Liar's Bar", "beschikbaar": True},
     "roulette": {"naam": "Roulette", "beschikbaar": True},
     "ridebus": {"naam": "Ride the Bus", "beschikbaar": True},
+    "crash": {"naam": "Crash", "beschikbaar": True},
 }
 state["spel_keuze"] = None
 LAATST_GEZIEN = {1: time.time(), 2: time.time()}
@@ -86,7 +89,7 @@ def controleer_verbindingen():
 
 
 def reset_naar_wachten():
-    global state, blackjack_state, paardenrace_state, liarsbar_state, roulette_state, ridebus_state
+    global state, blackjack_state, paardenrace_state, liarsbar_state, roulette_state, ridebus_state, crash_state
     state["fase"] = "wachten"
     state["spel_keuze"] = None
     blackjack_state = bj.nieuw_spel()
@@ -94,12 +97,26 @@ def reset_naar_wachten():
     liarsbar_state = lb.nieuw_spel()
     roulette_state = rt.nieuw_spel()
     ridebus_state = rb.nieuw_spel()
+    crash_state = cr.nieuw_spel()
 
 
 def sla_chips_op_indien_ingelogd(pid):
     naam = state["spelers"][pid]["gebruikersnaam"]
     if naam:
         db.chips_opslaan(naam, state["spelers"][pid]["chips"])
+
+
+def geef_donaties():
+    """Wie blut is, krijgt HUIS_DONATIE chips van het casino. Alleen aanroepen op veilige
+    momenten (spel gekozen/gestart, tussen rondes), nooit midden in een ronde.
+    De chips gaan naar de hoofdstatus, alle spel-statussen en de database."""
+    for pid in (1, 2):
+        if state["spelers"][pid]["chips"] <= 0:
+            state["spelers"][pid]["chips"] = pe.HUIS_DONATIE
+            state["spelers"][pid]["donatie"] = True
+            for spel_state in (blackjack_state, paardenrace_state, roulette_state, ridebus_state, crash_state):
+                spel_state["spelers"][pid]["chips"] = pe.HUIS_DONATIE
+            sla_chips_op_indien_ingelogd(pid)
 
 
 def sync_chips_naar_hoofdstatus():
@@ -211,6 +228,8 @@ def start_spel():
     if state["spel_keuze"] is None:
         return jsonify({"ok": False, "fout": "Er is nog geen spel gekozen."}), 400
 
+    geef_donaties()
+
     if state["spel_keuze"] == "poker":
         pe.start_nieuwe_hand(state)
     elif state["spel_keuze"] == "blackjack":
@@ -228,6 +247,9 @@ def start_spel():
     elif state["spel_keuze"] == "ridebus":
         state["fase"] = "ridebus"
         ridebus_state["fase"] = "inzetten"
+    elif state["spel_keuze"] == "crash":
+        state["fase"] = "crash"
+        crash_state["fase"] = "inzetten"
 
     return jsonify({"ok": True})
 
@@ -235,6 +257,8 @@ def start_spel():
 @app.route("/naar_menu", methods=["POST"])
 def naar_menu():
     sync_chips_naar_hoofdstatus()
+    if state["spel_keuze"] != "poker":
+        geef_donaties()
     for pid in (1, 2):
         sla_chips_op_indien_ingelogd(pid)
     reset_naar_wachten()
@@ -258,6 +282,10 @@ def volgende_hand():
         rt.klaar_voor_nieuwe_ronde(roulette_state)
     elif state["spel_keuze"] == "ridebus":
         rb.klaar_voor_nieuwe_ronde(ridebus_state)
+    elif state["spel_keuze"] == "crash":
+        cr.klaar_voor_nieuwe_ronde(crash_state)
+    if state["spel_keuze"] != "poker":  # poker regelt dit zelf vóór de blinds
+        geef_donaties()
     return jsonify({"ok": True})
 
 
@@ -356,6 +384,28 @@ def roulette_bevestig():
     roulette_state["spelers"][2]["chips"] = state["spelers"][2]["chips"]
     rt.bevestig_inzet_klaar(roulette_state, pid)
     return jsonify({"ok": True})
+
+
+@app.route("/crash_inzet", methods=["POST"])
+def crash_inzet():
+    data = request.get_json(force=True) or {}
+    pid = int(data.get("speler"))
+    if state["spelers"][pid]["chips"] <= 0:
+        state["spelers"][pid]["chips"] = pe.HUIS_DONATIE
+    crash_voor(pid)
+    ok, fout = cr.plaats_inzet(crash_state, pid, data.get("bedrag", 0), data.get("auto"))
+    crash_na(pid)
+    return jsonify({"ok": ok, "fout": fout})
+
+
+@app.route("/crash_cashout", methods=["POST"])
+def crash_cashout():
+    data = request.get_json(force=True) or {}
+    pid = int(data.get("speler"))
+    crash_voor(pid)
+    ok, fout = cr.cash_out(crash_state, pid)
+    crash_na(pid)
+    return jsonify({"ok": ok, "fout": fout})
 
 
 @app.route("/ridebus_inzet", methods=["POST"])
@@ -476,6 +526,49 @@ def liarsbar_status(voor_pid=None):
     }
 
 
+def crash_voor(pid):
+    crash_state["spelers"][pid]["chips"] = state["spelers"][pid]["chips"]
+
+
+def crash_na(pid):
+    state["spelers"][pid]["chips"] = crash_state["spelers"][pid]["chips"]
+    sla_chips_op_indien_ingelogd(pid)
+
+
+def werk_crash_bij():
+    """Voert automatische cash-outs/crash uit en synct de chips van wie uitbetaald kreeg."""
+    for pid in cr.werk_bij(crash_state):
+        crash_na(pid)
+
+
+def crash_status(voor_pid=None):
+    werk_crash_bij()
+    nu = time.time()
+    fase = crash_state["fase"]
+    spelers_info = {}
+    for pid, s in crash_state["spelers"].items():
+        spelers_info[pid] = {
+            "naam": s["naam"], "chips": state["spelers"][pid]["chips"], "inzet": s["inzet"],
+            "status": s["status"], "resultaat": s["resultaat"],
+            "uitbetaald_bij": s["uitbetaald_bij"], "winst": s["winst"],
+            # automatische cash-out alleen aan de eigenaar tonen
+            "auto": s["auto"] if voor_pid == pid else None,
+            "ingelogd_als": state["spelers"][pid]["gebruikersnaam"],
+        }
+    resultaat = {
+        "fase": fase, "groei": cr.GROEI, "spelers": spelers_info,
+        "verstreken": None, "multiplier": 1.0, "crash_punt": None,
+    }
+    if fase in ("lopend", "afgelopen"):
+        resultaat["verstreken"] = nu - crash_state["start_tijd"]
+        resultaat["multiplier"] = cr.multiplier_op(crash_state, nu)
+    if fase == "afgelopen":
+        resultaat["crash_punt"] = crash_state["crash_punt"]
+        resultaat["multiplier"] = crash_state["crash_punt"]
+        resultaat["crash_verstreken"] = crash_state["crash_tijd"] - crash_state["start_tijd"]
+    return resultaat
+
+
 def ridebus_voor(pid):
     """Hoofdstatus is leidend voor chips: kopieer naar ridebus voor de actie."""
     ridebus_state["spelers"][pid]["chips"] = state["spelers"][pid]["chips"]
@@ -522,7 +615,7 @@ def publieke_status(voor_pid=None):
         rt.check_draai_klaar(roulette_state)
 
     huidige_call = 0
-    if voor_pid is not None and state["fase"] not in ("wachten", "showdown", "einde", "blackjack", "paardenrace", "liarsbar", "roulette", "ridebus"):
+    if voor_pid is not None and state["fase"] not in ("wachten", "showdown", "einde", "blackjack", "paardenrace", "liarsbar", "roulette", "ridebus", "crash"):
         speler = state["spelers"][voor_pid]
         huidige_call = max(0, state["huidige_inzet"] - speler["street_bet"])
 
@@ -534,6 +627,9 @@ def publieke_status(voor_pid=None):
             "verbonden": s["verbonden"], "ingelogd_als": s["gebruikersnaam"],
         }
         if voor_pid == pid:
+            if s.get("donatie"):  # eenmalig melden dat het casino chips heeft gegeven
+                info["donatie"] = True
+                s["donatie"] = False
             info["hand"] = pe.zichtbare_hand(s["hand"]) if s["hand"] else []
             info["handtype"] = pe.eigen_handtype(s["hand"], state["community"]) if s["hand"] else None
         spelers_info[pid] = info
@@ -573,6 +669,8 @@ def publieke_status(voor_pid=None):
 
     elif state["spel_keuze"] == "ridebus" and state["fase"] == "ridebus":
         resultaat["ridebus"] = ridebus_status(voor_pid=voor_pid)
+    elif state["spel_keuze"] == "crash" and state["fase"] == "crash":
+        resultaat["crash"] = crash_status(voor_pid=voor_pid)
 
     return resultaat
 
