@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #121212; color: white; padding: 20px; text-align: center; }
+    .qr-container { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
+    .qr-card { background: #1e1e1e; padding: 15px; border-radius: 8px; }
+    img { width: 150px; height: 150px; }
+    button { padding: 10px 20px; font-size: 16px; margin: 10px; cursor: pointer; border-radius: 5px; border: none; }
+    .poker { background: #28a745; color: white; }
+    .bj { background: #17a2b8; color: white; }
+    .reset { background: #dc3545; color: white; }
+  </style>
+</head>
+<body>
+  <h1>Admin Bediening</h1>
+  <button class="poker" onclick="startPoker()">Start Poker Hand</button>
+  <button class="bj" onclick="startBlackjack()">Start Blackjack Ronde</button>
+  <button class="reset" onclick="resetServer()">Reset Server</button>
+
+  <h2>Speler QR Codes</h2>
+  <div class="qr-container" id="qrs"></div>
+
+  <script>
+    async function laadQrs() {
+      const res = await fetch('/api/admin/qr_codes');
+      const data = await res.json();
+      const div = document.getElementById('qrs');
+      div.innerHTML = "";
+      for (let pid in data) {
+        div.innerHTML += `
+          <div class="qr-card">
+            <h3>${data[pid].naam}</h3>
+            <img src="data:image/png;base64,${data[pid].qr}" /><br>
+            <a href="${data[pid].url}" target="_blank" style="color: #ffc107;">Open Link</a>
+          </div>
+        `;
+      }
+    }
+
+    async function startPoker() { await fetch('/api/admin/start_poker', { method: 'POST' }); }
+    async function startBlackjack() { await fetch('/api/admin/start_blackjack', { method: 'POST' }); }
+    async function resetServer() { await fetch('/api/admin/reset', { method: 'POST' }); laadQrs(); }
+
+    laadQrs();
+  </script>
+</body>
+</html>

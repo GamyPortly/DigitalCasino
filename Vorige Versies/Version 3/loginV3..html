@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inloggen - Speler {{ speler_id }}</title>
+<style>
+  body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+  .kader { border: 1px solid #999; max-width: 280px; margin: 0 auto 20px; padding: 16px; border-radius: 6px; }
+  input {
+    display: block; width: 100%; max-width: 240px; padding: 10px;
+    margin: 8px auto; font-size: 1em; box-sizing: border-box;
+  }
+  button { padding: 12px; width: 100%; max-width: 240px; margin: 6px auto; display: block; font-size: 1em; }
+  .fout { color: #c0392b; min-height: 1.2em; }
+  h3 { margin-bottom: 4px; }
+  .uitleg { color: #666; font-size: 0.85em; margin-top: -4px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+  <h1>Speler {{ speler_id }}</h1>
+
+  <div class="kader">
+    <h3>Al een account?</h3>
+    <p class="uitleg">Log in met je gebruikersnaam en je 4-cijferige code</p>
+    <input id="login_naam" placeholder="gebruikersnaam" autocomplete="off">
+    <input id="login_code" placeholder="4-cijferige code" maxlength="4" inputmode="numeric">
+    <button onclick="inloggen()">Inloggen</button>
+  </div>
+
+  <div class="kader">
+    <h3>Nieuw hier?</h3>
+    <p class="uitleg">Kies een gebruikersnaam en een 4-cijferige code, dit wordt je account</p>
+    <input id="reg_naam" placeholder="kies een gebruikersnaam" autocomplete="off">
+    <input id="reg_code" placeholder="kies een 4-cijferige code" maxlength="4" inputmode="numeric">
+    <button onclick="registreren()">Account aanmaken</button>
+  </div>
+
+  <p class="fout" id="foutmelding"></p>
+
+<script>
+const SPELER_ID = {{ speler_id }};
+
+async function verstuur(pad, gebruikersnaam, code) {
+  const foutEl = document.getElementById("foutmelding");
+  gebruikersnaam = (gebruikersnaam || "").trim();
+  code = (code || "").trim();
+  if (!gebruikersnaam) {
+    foutEl.textContent = "Vul een gebruikersnaam in.";
+    return;
+  }
+  if (!/^[0-9]{4}$/.test(code)) {
+    foutEl.textContent = "De code moet uit precies 4 cijfers bestaan.";
+    return;
+  }
+  try {
+    const res = await fetch(pad, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gebruikersnaam: gebruikersnaam, code: code })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      location.reload();
+    } else {
+      foutEl.textContent = data.fout;
+    }
+  } catch (e) {
+    foutEl.textContent = "Geen verbinding met de server.";
+  }
+}
+
+function inloggen() {
+  verstuur(`/login/${SPELER_ID}`, document.getElementById("login_naam").value, document.getElementById("login_code").value);
+}
+
+function registreren() {
+  verstuur(`/registreer/${SPELER_ID}`, document.getElementById("reg_naam").value, document.getElementById("reg_code").value);
+}
+</script>
+</body>
+</html>
