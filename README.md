@@ -12,7 +12,9 @@ Session Management: Threading locks, auto-fold / auto-stand disconnect detection
 
 Persistent Data: SQLite database handling player accounts with 4-digit PINs, persistent chip balance tracking, and leaderboards.
 
-# Repository Structure
+## Repository Structure
+
+```text
 digitaal-casino/
 ├── app.py                  # Flask server routing, state locks, session handling
 ├── poker_engine.py          # Poker game logic, pot management, hand evaluations via Treys
@@ -24,14 +26,18 @@ digitaal-casino/
     ├── centraal.html        # Main TV display dashboard
     ├── speler.html          # Mobile controller interface
     └── login.html           # Player authentication page
-
+```
 **Requirements**
 Install Python 3 dependencies:
-_pip install flask qrcode pillow treys werkzeug_
+```text 
+pip install flask qrcode pillow treys werkzeug
+```
 
 **Launching the Server**
 Run the Flask application:
-_python app.py_
+```text
+python app.py
+```
 
 **Usage**
 Open the hosted local network address (e.g. http://<PI_IP_ADDRESS>:5000) on the TV or PC monitor to serve as the main display.
