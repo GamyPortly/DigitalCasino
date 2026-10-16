@@ -119,7 +119,7 @@
   <div id="crash_zone" style="display:none;">
     <h2>🚀 Crash 🚀</h2>
     <p id="cr_fase_tekst" style="color:#f1c40f; font-size:1.2em;"></p>
-    <div id="cr_grote_multiplier" style="font-size:4.5em; font-weight:bold; color:#2ecc71;">1.00x</div>
+    <div id="cr_grote_multiplier" style="font-size:4.5em; font-weight:bold; color:#2ecc71;">0.25x</div>
     <canvas id="cr_canvas" width="640" height="260" style="background:#2a2a2a; border:1px solid #555; border-radius:8px; max-width:95%;"></canvas>
     <div class="spelers-rij" id="cr_spelers"></div>
   </div>
@@ -157,11 +157,12 @@ function crashTekenen() {
   const g = crashSync.groei;
 
   let t, m, gecrasht = false;
+  const startMultiplier = crashSync.start_multiplier;
   if (crashSync.fase === "afgelopen") {
     t = crashSync.crash_verstreken; m = crashSync.crash_punt; gecrasht = true;
   } else if (crashSync.fase === "lopend") {
-    t = crashT(); m = t > 0 ? Math.floor(Math.exp(g * t) * 100) / 100 : 1;
-  } else { t = 0; m = 1; }
+    t = crashT(); m = t > 0 ? Math.floor(startMultiplier * Math.exp(g * t) * 100) / 100 : startMultiplier;
+  } else { t = 0; m = startMultiplier; }
 
   multEl.textContent = m.toFixed(2) + "x";
   multEl.style.color = gecrasht ? "#e74c3c" : "#2ecc71";
@@ -176,7 +177,7 @@ function crashTekenen() {
   for (let i = 0; i <= stappen; i++) {
     const ti = Math.max(0, t) * i / stappen;
     const x = (ti / tMax) * (W - 20) + 10;
-    const y = H - 10 - ((Math.exp(g * ti) - 1) / (mMax - 1)) * (H - 20);
+    const y = H - 10 - ((startMultiplier * Math.exp(g * ti) - startMultiplier) / (mMax - startMultiplier)) * (H - 20);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.stroke();
@@ -445,7 +446,7 @@ async function ververs() {
       const cr = data.crash;
 
       crashSync = {
-        fase: cr.fase, groei: cr.groei,
+        fase: cr.fase, groei: cr.groei, start_multiplier: cr.start_multiplier,
         verstreken: cr.verstreken === null ? -1 : cr.verstreken, ontvangen: performance.now(),
         crash_punt: cr.crash_punt, crash_verstreken: cr.crash_verstreken,
       };

@@ -556,8 +556,9 @@ def crash_status(voor_pid=None):
             "ingelogd_als": state["spelers"][pid]["gebruikersnaam"],
         }
     resultaat = {
-        "fase": fase, "groei": cr.GROEI, "spelers": spelers_info,
-        "verstreken": None, "multiplier": 1.0, "crash_punt": None,
+        "fase": fase, "groei": cr.GROEI, "start_multiplier": cr.START_MULTIPLIER,
+        "spelers": spelers_info,
+        "verstreken": None, "multiplier": cr.START_MULTIPLIER, "crash_punt": None,
     }
     if fase in ("lopend", "afgelopen"):
         resultaat["verstreken"] = nu - crash_state["start_tijd"]
