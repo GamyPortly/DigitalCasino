@@ -11,6 +11,7 @@ import blackjack_engine as bj
 import paardenrace_engine as pr
 import liarsbar_engine as lb
 import roulette_engine as rt
+import ridebus_engine as rb
 import database as db
 
 app = Flask(__name__)
@@ -24,6 +25,7 @@ blackjack_state = bj.nieuw_spel()
 paardenrace_state = pr.nieuw_spel()
 liarsbar_state = lb.nieuw_spel()
 roulette_state = rt.nieuw_spel()
+ridebus_state = rb.nieuw_spel()
 
 BESCHIKBARE_SPELLEN = {
     "poker": {"naam": "Poker (Texas Hold'em)", "beschikbaar": True},
@@ -31,6 +33,7 @@ BESCHIKBARE_SPELLEN = {
     "paardenrace": {"naam": "Paardenrennen", "beschikbaar": True},
     "liarsbar": {"naam": "Liar's Bar", "beschikbaar": True},
     "roulette": {"naam": "Roulette", "beschikbaar": True},
+    "ridebus": {"naam": "Ride the Bus", "beschikbaar": True},
 }
 state["spel_keuze"] = None
 LAATST_GEZIEN = {1: time.time(), 2: time.time()}
@@ -83,13 +86,14 @@ def controleer_verbindingen():
 
 
 def reset_naar_wachten():
-    global state, blackjack_state, paardenrace_state, liarsbar_state, roulette_state
+    global state, blackjack_state, paardenrace_state, liarsbar_state, roulette_state, ridebus_state
     state["fase"] = "wachten"
     state["spel_keuze"] = None
     blackjack_state = bj.nieuw_spel()
     paardenrace_state = pr.nieuw_spel()
     liarsbar_state = lb.nieuw_spel()
     roulette_state = rt.nieuw_spel()
+    ridebus_state = rb.nieuw_spel()
 
 
 def sla_chips_op_indien_ingelogd(pid):
@@ -221,6 +225,9 @@ def start_spel():
     elif state["spel_keuze"] == "roulette":
         state["fase"] = "roulette"
         roulette_state["fase"] = "inzetten"
+    elif state["spel_keuze"] == "ridebus":
+        state["fase"] = "ridebus"
+        ridebus_state["fase"] = "inzetten"
 
     return jsonify({"ok": True})
 
@@ -249,6 +256,8 @@ def volgende_hand():
     elif state["spel_keuze"] == "roulette":
         sync_chips_naar_hoofdstatus()
         rt.klaar_voor_nieuwe_ronde(roulette_state)
+    elif state["spel_keuze"] == "ridebus":
+        rb.klaar_voor_nieuwe_ronde(ridebus_state)
     return jsonify({"ok": True})
 
 
@@ -349,6 +358,38 @@ def roulette_bevestig():
     return jsonify({"ok": True})
 
 
+@app.route("/ridebus_inzet", methods=["POST"])
+def ridebus_inzet():
+    data = request.get_json(force=True) or {}
+    pid = int(data.get("speler"))
+    if state["spelers"][pid]["chips"] <= 0:
+        state["spelers"][pid]["chips"] = pe.HUIS_DONATIE
+    ridebus_voor(pid)
+    ok, fout = rb.plaats_inzet(ridebus_state, pid, data.get("bedrag", 0))
+    ridebus_na(pid)
+    return jsonify({"ok": ok, "fout": fout})
+
+
+@app.route("/ridebus_gok", methods=["POST"])
+def ridebus_gok():
+    data = request.get_json(force=True) or {}
+    pid = int(data.get("speler"))
+    ridebus_voor(pid)
+    ok, fout = rb.gok(ridebus_state, pid, data.get("keuze"))
+    ridebus_na(pid)
+    return jsonify({"ok": ok, "fout": fout})
+
+
+@app.route("/ridebus_uitbetaal", methods=["POST"])
+def ridebus_uitbetaal():
+    data = request.get_json(force=True) or {}
+    pid = int(data.get("speler"))
+    ridebus_voor(pid)
+    ok, fout = rb.uitbetalen(ridebus_state, pid)
+    ridebus_na(pid)
+    return jsonify({"ok": ok, "fout": fout})
+
+
 # ---------------------------------------------------------------------------
 # STATUS HELPER FUNCTIES
 # ---------------------------------------------------------------------------
@@ -435,6 +476,40 @@ def liarsbar_status(voor_pid=None):
     }
 
 
+def ridebus_voor(pid):
+    """Hoofdstatus is leidend voor chips: kopieer naar ridebus voor de actie."""
+    ridebus_state["spelers"][pid]["chips"] = state["spelers"][pid]["chips"]
+
+
+def ridebus_na(pid):
+    """Na de actie: chips terug naar de hoofdstatus en opslaan in de database."""
+    state["spelers"][pid]["chips"] = ridebus_state["spelers"][pid]["chips"]
+    sla_chips_op_indien_ingelogd(pid)
+
+
+def ridebus_status(voor_pid=None):
+    spelers_info = {}
+    for pid, s in ridebus_state["spelers"].items():
+        klaar = s["status"] in ("verloren", "uitbetaald", "gewonnen")
+        spelen = s["status"] == "spelen"
+        spelers_info[pid] = {
+            "naam": s["naam"], "chips": state["spelers"][pid]["chips"], "inzet": s["inzet"],
+            "status": s["status"], "resultaat": s["resultaat"],
+            "ingelogd_als": state["spelers"][pid]["gebruikersnaam"],
+            "kaarten": [rb.kaart_tekst(k) for k in s["kaarten"]],
+            "stap": s["stap"],
+            "vraag": rb.VRAGEN[s["stap"]] if spelen else None,
+            "uitbetaal_waarde": rb.huidige_waarde(s) if spelen else 0,
+            "klaar": klaar,
+        }
+    return {
+        "fase": ridebus_state["fase"],
+        "multipliers": rb.MULTIPLIERS,
+        "vragen": [v["titel"] for v in rb.VRAGEN],
+        "spelers": spelers_info,
+    }
+
+
 def publieke_status(voor_pid=None):
     if voor_pid in (1, 2):
         LAATST_GEZIEN[voor_pid] = time.time()
@@ -447,7 +522,7 @@ def publieke_status(voor_pid=None):
         rt.check_draai_klaar(roulette_state)
 
     huidige_call = 0
-    if voor_pid is not None and state["fase"] not in ("wachten", "showdown", "einde", "blackjack", "paardenrace", "liarsbar", "roulette"):
+    if voor_pid is not None and state["fase"] not in ("wachten", "showdown", "einde", "blackjack", "paardenrace", "liarsbar", "roulette", "ridebus"):
         speler = state["spelers"][voor_pid]
         huidige_call = max(0, state["huidige_inzet"] - speler["street_bet"])
 
@@ -495,6 +570,9 @@ def publieke_status(voor_pid=None):
                 } for p, s in roulette_state["spelers"].items()
             }
         }
+
+    elif state["spel_keuze"] == "ridebus" and state["fase"] == "ridebus":
+        resultaat["ridebus"] = ridebus_status(voor_pid=voor_pid)
 
     return resultaat
 

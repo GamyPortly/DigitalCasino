@@ -14,6 +14,9 @@
   
   .kaarten-rij { margin: 15px 0; }
   .kaart { display: inline-block; width: 55px; height: 75px; border: 1px solid #aaa; margin: 3px; line-height: 75px; font-size: 1.3em; background: #fff; color: #000; border-radius: 5px; font-weight: bold; }
+  .kaart.rood { color: #c0392b; }
+  .ladder { color: #aaa; font-size: 0.95em; margin: 10px 0 20px; }
+  .ladder .actief { color: #f1c40f; font-weight: bold; }
   .pot { font-size: 1.3em; margin-bottom: 20px; color: #f1c40f; }
   
   .spelers-rij { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
@@ -104,6 +107,14 @@
     <div class="spelers-rij" id="rt_spelers"></div>
   </div>
 
+  <!-- RIDE THE BUS SCHERM -->
+  <div id="ridebus_zone" style="display:none;">
+    <h2>🚌 Ride the Bus 🚌</h2>
+    <p id="rb_fase_tekst" style="color:#f1c40f; font-size:1.2em;"></p>
+    <p class="ladder" id="rb_ladder"></p>
+    <div class="spelers-rij" id="rb_spelers"></div>
+  </div>
+
   <div id="wintekst" style="font-size: 1.4em; margin-top: 20px; color: #2ecc71; font-weight: bold;"></div>
   <p id="startbericht" style="font-size:1.2em; margin-top:20px; color:#f1c40f;"></p>
 
@@ -115,6 +126,12 @@ function verbergAlles() {
   document.getElementById("paardenrace_zone").style.display = "none";
   document.getElementById("liarsbar_zone").style.display = "none";
   document.getElementById("roulette_zone").style.display = "none";
+  document.getElementById("ridebus_zone").style.display = "none";
+}
+
+function rbKaartHtml(k) {
+  const rood = k.includes("\u2665") || k.includes("\u2666");
+  return `<div class="kaart ${rood ? 'rood' : ''}">${k}</div>`;
 }
 
 async function ververs() {
@@ -322,6 +339,38 @@ async function ververs() {
             ${sp.resultaat ? `<p style="color:#f1c40f;"><b>${sp.resultaat}</b></p>` : ''}
           </div>`;
       }
+      return;
+    }
+
+    // 7. RIDE THE BUS
+    if (data.fase === "ridebus" && data.ridebus) {
+      verbergAlles();
+      document.getElementById("ridebus_zone").style.display = "block";
+      const rb = data.ridebus;
+
+      document.getElementById("rb_fase_tekst").textContent =
+        rb.fase === "inzetten" ? "Spelers zijn aan het inzetten..." :
+        rb.fase === "spelen" ? "Wie rijdt de bus uit? Kies op je GSM!" : "Ronde afgelopen!";
+
+      const spelersEl = document.getElementById("rb_spelers");
+      spelersEl.innerHTML = "";
+      for (const pid of [1, 2]) {
+        const sp = rb.spelers[pid];
+        const vraagTekst = sp.vraag ? sp.vraag.titel : "";
+        const ladder = rb.multipliers.map((m, i) =>
+          `<span class="${sp.status === 'spelen' && sp.stap === i ? 'actief' : ''}">${m}x</span>`).join(" → ");
+        spelersEl.innerHTML += `
+          <div class="speler-kaart ${sp.status === 'spelen' ? 'aan_de_beurt' : ''}" style="min-width:300px;">
+            <h3>${sp.ingelogd_als || sp.naam}</h3>
+            <div class="kaarten-rij" style="min-height:85px;">${sp.kaarten.map(rbKaartHtml).join("")}</div>
+            ${vraagTekst ? `<p style="color:#f1c40f;">Vraag ${sp.stap + 1}/4: ${vraagTekst}</p>` : ''}
+            <p>Inzet: <b>${sp.inzet}</b> | Chips: <b>${sp.chips}</b></p>
+            <p style="font-size:0.9em; color:#aaa;">${ladder}</p>
+            ${sp.resultaat ? `<p style="color:${sp.status === 'verloren' ? '#e74c3c' : '#2ecc71'};"><b>${sp.resultaat}</b></p>` : ''}
+          </div>`;
+      }
+      document.getElementById("rb_ladder").innerHTML =
+        "Uitbetaling: " + rb.vragen.map((v, i) => `${v} <b>${rb.multipliers[i]}x</b>`).join(" • ");
       return;
     }
 

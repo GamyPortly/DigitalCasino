@@ -159,6 +159,33 @@
     </div>
   </div>
 
+  <!-- RIDE THE BUS -->
+  <div id="ridebus_zone" style="display:none;">
+    <h3>🚌 Ride the Bus 🚌</h3>
+    <p>Chips: <b id="rb_chips">0</b> | inzet: <b id="rb_inzet">0</b></p>
+
+    <div id="rb_inzet_zone" style="display:none;">
+      <p>Hoeveel wil je inzetten?</p>
+      <input type="number" id="rb_bedrag" placeholder="bedrag" value="20">
+      <button style="background:#27ae60;" onclick="stuurRidebusInzet()">Inzetten</button>
+    </div>
+
+    <div id="rb_speel_zone" style="display:none;">
+      <div id="rb_kaarten"></div>
+      <p id="rb_vraag" style="color:#f1c40f; font-size:1.2em; font-weight:bold;"></p>
+      <div id="rb_opties"></div>
+      <button id="rb_uitbetaal_knop" style="background:#8e44ad; display:none;" onclick="stuurRidebusUitbetaal()"></button>
+      <p id="rb_ladder" style="color:#aaa; font-size:0.85em;"></p>
+    </div>
+
+    <div id="rb_klaar_zone" style="display:none;">
+      <div id="rb_kaarten_klaar"></div>
+      <p id="rb_resultaat_tekst" style="color:#f1c40f; font-size:1.2em;"></p>
+      <p id="rb_wacht_tekst" style="color:#aaa;"></p>
+      <button id="rb_volgende_knop" onclick="volgendeHand()">Volgende ronde</button>
+    </div>
+  </div>
+
   <!-- SHOWDOWN (POKER) -->
   <div id="showdown_zone" style="display:none;">
     <p id="wintekst_speler" style="color:#f1c40f;"></p>
@@ -343,6 +370,45 @@ async function bevestigRouletteKlaar() {
   document.getElementById("rt_inzet_status").textContent = "Inzetten bevestigd! Wachten op de draai...";
 }
 
+/* RIDE THE BUS */
+let rbHandtekening = "";
+
+async function stuurRidebusInzet() {
+  const bedrag = parseInt(document.getElementById("rb_bedrag").value);
+  if (!bedrag || bedrag <= 0) return alert("Vul een geldig bedrag in!");
+  const res = await fetch("/ridebus_inzet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, bedrag: bedrag })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+async function stuurRidebusGok(keuze) {
+  const res = await fetch("/ridebus_gok", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, keuze: keuze })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+async function stuurRidebusUitbetaal() {
+  const res = await fetch("/ridebus_uitbetaal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+function ridebusKaartenHtml(kaarten) {
+  return (kaarten || []).map(k => kaart_html(k)).join("");
+}
+
 /* VERVERS LOOP */
 async function ververs() {
   try {
@@ -359,6 +425,7 @@ async function ververs() {
     document.getElementById("paardenrace_zone").style.display = "none";
     document.getElementById("liarsbar_zone").style.display = "none";
     document.getElementById("roulette_zone").style.display = "none";
+    document.getElementById("ridebus_zone").style.display = "none";
     document.getElementById("showdown_zone").style.display = "none";
 
     // 1. WACHTEN
@@ -504,7 +571,70 @@ async function ververs() {
       return;
     }
 
-    // 6. POKER
+    // 6. RIDE THE BUS
+    if (data.fase === "ridebus" && data.ridebus) {
+      document.getElementById("ridebus_zone").style.display = "block";
+      const rb = data.ridebus;
+      const mijnRb = rb.spelers[SPELER_ID];
+
+      document.getElementById("rb_chips").textContent = mij.chips;
+      document.getElementById("rb_inzet").textContent = mijnRb.inzet;
+
+      const inzetZone = document.getElementById("rb_inzet_zone");
+      const speelZone = document.getElementById("rb_speel_zone");
+      const klaarZone = document.getElementById("rb_klaar_zone");
+      inzetZone.style.display = "none";
+      speelZone.style.display = "none";
+      klaarZone.style.display = "none";
+
+      if (rb.fase === "inzetten" && mijnRb.status === "wacht") {
+        inzetZone.style.display = "block";
+      } else if (rb.fase === "inzetten") {
+        klaarZone.style.display = "block";
+        document.getElementById("rb_kaarten_klaar").innerHTML = "";
+        document.getElementById("rb_resultaat_tekst").textContent = "Inzet geplaatst.";
+        document.getElementById("rb_wacht_tekst").textContent = "Wachten op de andere speler...";
+        document.getElementById("rb_volgende_knop").style.display = "none";
+      } else if (mijnRb.status === "spelen") {
+        speelZone.style.display = "block";
+        document.getElementById("rb_kaarten").innerHTML = ridebusKaartenHtml(mijnRb.kaarten);
+        document.getElementById("rb_vraag").textContent = `Vraag ${mijnRb.stap + 1}/4: ${mijnRb.vraag.titel}`;
+
+        // Knoppen alleen opnieuw opbouwen als er iets veranderd is (anders gaan klikken verloren)
+        const handtekening = `${mijnRb.stap}|${mijnRb.uitbetaal_waarde}`;
+        if (handtekening !== rbHandtekening) {
+          rbHandtekening = handtekening;
+          const optiesEl = document.getElementById("rb_opties");
+          optiesEl.innerHTML = "";
+          mijnRb.vraag.opties.forEach(o => {
+            const b = document.createElement("button");
+            b.textContent = o.charAt(0).toUpperCase() + o.slice(1);
+            b.onclick = () => stuurRidebusGok(o);
+            optiesEl.appendChild(b);
+          });
+          const uitKnop = document.getElementById("rb_uitbetaal_knop");
+          if (mijnRb.uitbetaal_waarde > 0) {
+            uitKnop.style.display = "block";
+            uitKnop.textContent = `Uitbetalen (${mijnRb.uitbetaal_waarde} chips)`;
+          } else {
+            uitKnop.style.display = "none";
+          }
+        }
+        document.getElementById("rb_ladder").textContent =
+          "Uitbetaling na elke vraag: " + rb.multipliers.map(m => m + "x").join(" → ");
+      } else {
+        rbHandtekening = "";
+        klaarZone.style.display = "block";
+        document.getElementById("rb_kaarten_klaar").innerHTML = ridebusKaartenHtml(mijnRb.kaarten);
+        document.getElementById("rb_resultaat_tekst").textContent = mijnRb.resultaat || "";
+        const afgelopen = rb.fase === "afgelopen";
+        document.getElementById("rb_wacht_tekst").textContent = afgelopen ? "" : "Wachten tot de andere speler klaar is...";
+        document.getElementById("rb_volgende_knop").style.display = afgelopen ? "block" : "none";
+      }
+      return;
+    }
+
+    // 7. POKER
     if (["preflop", "flop", "turn", "river"].includes(data.fase)) {
       document.getElementById("spel_zone").style.display = "block";
       const handEl = document.getElementById("mijn_hand");
