@@ -21,7 +21,7 @@ HUIS_MARGE = 0.97     # 3% huisvoordeel
 def nieuw_crashpunt():
     r = random.random()
     punt = math.floor(HUIS_MARGE * 100 / (1 - r)) / 100
-    return max(1.00, min(MAX_CRASH, punt))
+    return max(0.50, min(MAX_CRASH, punt))
 
 
 def tijd_voor_multiplier(m):
