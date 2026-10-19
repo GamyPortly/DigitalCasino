@@ -11,7 +11,7 @@ Mobile Controller: Web-based interface for players to join seats, log in, check 
 
 Session Management: Threading locks, auto-fold / auto-stand disconnect detection via heartbeats, turn timers, and multi-device session protection.
 
-Persistent Data: SQLite database handling player accounts with 4-digit PINs, persistent chip balance tracking, and leaderboards.
+Persistent Data: SQLite database handling player accounts with 4-digit PINs, persistent chip balance tracking.
 
 ## Repository Structure
 
