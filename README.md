@@ -1,6 +1,6 @@
 **Digital Casino Game Table**
 
-An interactive, Raspberry Pi-powered digital casino system for playing Poker (Texas Hold'em) and Blackjack. Players use their smartphones to scan a QR code from a central display, allowing them to view their private hands and send actions while community cards, pot totals, and game states render live on the main TV screen.
+An interactive, Raspberry Pi-powered digital casino system for playing Poker (Texas Hold'em), Blackjack and more! Players use their smartphones to scan a QR code from a central display, allowing them to view their private hands and send actions while community cards, pot totals, and game states render live on the main TV screen.
 
 Features
 Multi-Game Support: Switch seamlessly between Texas Hold'em Poker and Blackjack.
