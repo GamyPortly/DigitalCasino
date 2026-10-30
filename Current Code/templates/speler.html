@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speler {{ speler_id }} - Digital Casino</title>
+<style>
+  body { font-family: Arial, sans-serif; text-align: center; padding: 15px; background: radial-gradient(circle at center, #1b4d3e 0%, #0e2920 100%); color: white; min-height: 100vh; box-sizing: border-box; margin: 0; }
+  .kaart { display: inline-block; width: 55px; height: 75px; border: 1px solid #555; margin: 4px; line-height: 75px; font-size: 1.1em; cursor: pointer; border-radius: 4px; user-select: none; background: #fff; color: #000; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+  .kaart.gekozen { border: 3px solid #e67e22; background: #f39c12; color: white; font-weight: bold; }
+  button { display: block; width: 100%; max-width: 280px; padding: 14px; margin: 8px auto; font-size: 1.1em; border-radius: 6px; border: none; background: #e67e22; color: white; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .klein-knop { padding: 8px; font-size: 0.9em; background: #7f8c8d; }
+  .menu-knop { background: #c0392b; margin-top: 25px; }
+  .raise-zone { max-width: 280px; margin: 0 auto 8px; display: flex; gap: 6px; }
+  .inzet-grid { display: flex; justify-content: center; gap: 8px; max-width: 280px; margin: 10px auto; }
+  .inzet-grid button { flex: 1; margin: 0; padding: 10px; }
+  input { width: 90%; max-width: 260px; padding: 10px; font-size: 1em; margin: 8px auto; display: block; border-radius: 4px; border: 1px solid #555; background: #333; color: white; box-sizing: border-box; }
+  .handtype { color: #2ecc71; font-weight: bold; }
+  .dier-knop { background: #34495e; margin: 4px auto; font-size: 1em; }
+  .dier-knop.gekozen { background: #27ae60; font-weight: bold; border: 2px solid #f1c40f; }
+</style>
+</head>
+<body>
+  <div id="donatie_banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:100; background:#27ae60; color:white; padding:14px; font-weight:bold;">
+    🎁 Je had geen chips meer. Het casino schenkt je 1000 chips!
+  </div>
+  <div style="display:flex; justify-content:space-between; align-items:center; max-width:280px; margin:0 auto 10px;">
+    <span id="ingelogd_als" style="color:#aaa; font-size:0.9em;"></span>
+    <button class="klein-knop" style="width:auto; margin:0;" onclick="veiligAfsluiten()">Afsluiten</button>
+  </div>
+
+  <h1>Speler {{ speler_id }} {% if speler_id == 1 %}(Host 👑){% endif %}</h1>
+
+  <!-- WACHT / KIES SPEL -->
+  <div id="wacht_zone" style="display:none;">
+    <p id="wachtbericht">Wachten op de andere speler...</p>
+    <div id="menu_zone" style="display:none;">
+      <p id="menu_titel"><b>Kies een spel:</b></p>
+      <div id="spel_knoppen"></div>
+    </div>
+    <button id="start_knop" style="background:#27ae60; display:none;" onclick="startSpel()">Start Spel</button>
+  </div>
+
+  <!-- POKER -->
+  <div id="spel_zone" style="display:none;">
+    <h3>Poker</h3>
+    <div id="mijn_hand"></div>
+    <p class="handtype" id="mijn_handtype"></p>
+    <p>chips: <b id="mijn_chips">0</b> | inzet: <b id="mijn_inzet">0</b> | pot: <b id="pot">0</b></p>
+    <div id="timer_zone" style="font-size:1.2em; margin:10px 0; color:#f1c40f;"></div>
+
+    <div id="knoppen_zone">
+      <button id="raise_knop" onclick="toonRaiseZone()">Raise</button>
+      <div class="raise-zone" id="raise_zone" style="display:none;">
+        <input type="number" id="raise_bedrag" placeholder="bedrag">
+        <button style="width:auto;" onclick="stuurRaise()">Ok</button>
+      </div>
+      <button id="check_knop" onclick="stuurActie('check')">Check</button>
+      <button id="fold_knop" style="background:#c0392b;" onclick="stuurActie('fold')">Fold</button>
+    </div>
+  </div>
+
+  <!-- BLACKJACK -->
+  <div id="blackjack_zone" style="display:none;">
+    <h3>Blackjack</h3>
+    <div id="bj_inzet_zone" style="display:none;">
+      <p>Hoeveel wil je inzetten?</p>
+      <input type="number" id="bj_bedrag" placeholder="bedrag" value="20">
+      <button style="background:#27ae60;" onclick="stuurBlackjackInzet()">Inzetten</button>
+      <p id="bj_inzet_status" style="color:#f1c40f;"></p>
+    </div>
+
+    <div id="bj_spel_zone" style="display:none;">
+      <p>Jouw hand:</p>
+      <div id="bj_mijn_hand"></div>
+      <p>chips: <b id="bj_chips">0</b> | inzet: <b id="bj_inzet">0</b></p>
+      <p id="bj_status_tekst" style="color:#f1c40f;"></p>
+      <button id="bj_hit_knop" style="background:#2980b9;" onclick="stuurBlackjackActie('hit')">Hit</button>
+      <button id="bj_stand_knop" style="background:#c0392b;" onclick="stuurBlackjackActie('stand')">Stand</button>
+    </div>
+
+    <div id="bj_afgelopen_zone" style="display:none;">
+      <p id="bj_resultaat_tekst" style="color:#f1c40f; font-size:1.2em;"></p>
+      <button onclick="volgendeHand()">Volgende ronde</button>
+    </div>
+  </div>
+
+  <!-- ANIMAL RACING -->
+  <div id="animalrace_zone" style="display:none;">
+    <h3>Animal Racing 🐾</h3>
+    <div id="ar_inzet_zone" style="display:none;">
+      <p>Kies je dier:</p>
+      <div id="ar_dier_knoppen"></div>
+      <input type="number" id="ar_bedrag" placeholder="bedrag" value="20">
+      <button style="background:#27ae60;" onclick="stuurAnimalraceInzet()">Inzetten</button>
+      <p id="ar_inzet_status" style="color:#f1c40f;"></p>
+    </div>
+
+    <div id="ar_race_zone" style="display:none;">
+      <p>Jouw dier: <b id="ar_mijn_dier" style="color:#f1c40f;"></b></p>
+      <p>chips: <b id="ar_chips">0</b> | inzet: <b id="ar_inzet">0</b></p>
+      <p>Kijk naar het centrale scherm!</p>
+    </div>
+
+    <div id="ar_afgelopen_zone" style="display:none;">
+      <p id="ar_resultaat_tekst" style="color:#f1c40f;"></p>
+      <button onclick="volgendeHand()">Volgende race</button>
+    </div>
+  </div>
+
+  <!-- LIAR'S BAR -->
+  <div id="liarsbar_zone" style="display:none;">
+    <h3>Liar's Bar</h3>
+    <p>Doelkaart: <b id="lb_mijn_doel" style="color:#f39c12;"></b></p>
+    
+    <div id="lb_speel_fase" style="display:none;">
+      <p>Selecteer kaarten om neer te leggen:</p>
+      <div id="lb_mijn_hand_knoppen"></div>
+      <br>
+      <button id="lb_speel_knop" onclick="stuurLiarsBarSpeel()">Gooi Kaarten</button>
+      <button id="lb_call_knop" style="background:#c0392b;" onclick="stuurLiarsBarCall()">Call Bluff!</button>
+    </div>
+
+    <div id="lb_coinflip_fase" style="display:none;">
+      <h3>🔥 Heads or Tails? 🔥</h3>
+      <p>Kies juist om te overleven:</p>
+      <button style="background:#27ae60;" onclick="stuurLiarsBarCoinflip('heads')">HEADS (Kop)</button>
+      <button style="background:#2980b9;" onclick="stuurLiarsBarCoinflip('tails')">TAILS (Munt)</button>
+    </div>
+  </div>
+
+  <!-- ROULETTE -->
+  <div id="roulette_zone" style="display:none;">
+    <h3>🎰 Roulette 🎰</h3>
+    <p>Chips: <b id="rt_chips">0</b></p>
+
+    <div id="rt_inzet_fase">
+      <p><b>Plaats inzet:</b></p>
+      <input type="number" id="rt_bedrag" placeholder="Bedrag" value="50">
+      
+      <div class="inzet-grid">
+        <button style="background:#c0392b;" onclick="stuurRouletteInzet('kleur', 'rood')">Rood (2x)</button>
+        <button style="background:#2c3e50;" onclick="stuurRouletteInzet('kleur', 'zwart')">Zwart (2x)</button>
+      </div>
+
+      <div class="inzet-grid">
+        <button style="background:#2980b9;" onclick="stuurRouletteInzet('pariteit', 'even')">Even (2x)</button>
+        <button style="background:#8e44ad;" onclick="stuurRouletteInzet('pariteit', 'oneven')">Oneven (2x)</button>
+      </div>
+
+      <input type="number" id="rt_getal" placeholder="Specifiek Getal (0-36)" min="0" max="36">
+      <button style="background:#f39c12;" onclick="stuurRouletteGetalInzet()">Inzetten op Getal (36x)</button>
+
+      <p id="rt_fout" style="display:none; background:#c0392b; color:#fff; padding:10px; border-radius:6px; font-weight:bold; margin:10px 0;"></p>
+      <p id="rt_inzet_status" style="color:#f1c40f;"></p>
+      <button style="background:#27ae60;" onclick="bevestigRouletteKlaar()">Draai het Rad!</button>
+    </div>
+
+    <div id="rt_uitslag_fase" style="display:none;">
+      <p id="rt_resultaat_tekst" style="font-size:1.2em; color:#f1c40f;"></p>
+      <button onclick="volgendeHand()">Volgende Ronde</button>
+    </div>
+  </div>
+
+  <!-- CRASH -->
+  <div id="crash_zone" style="display:none;">
+    <h3>🚀 Crash 🚀</h3>
+    <p>Chips: <b id="cr_chips">0</b> | inzet: <b id="cr_inzet">0</b></p>
+
+    <div id="cr_inzet_zone" style="display:none;">
+      <p>Hoeveel wil je inzetten?</p>
+      <input type="number" id="cr_bedrag" placeholder="bedrag" value="20">
+      <input type="number" id="cr_auto" placeholder="Auto cash-out (bv. 2.5) - optioneel" step="0.1" min="1.01">
+      <button style="background:#27ae60;" onclick="stuurCrashInzet()">Inzetten</button>
+    </div>
+
+    <div id="cr_loop_zone" style="display:none;">
+      <div id="cr_multiplier" style="font-size:3.2em; font-weight:bold; margin:10px 0; color:#2ecc71;">0.10x</div>
+      <p id="cr_aftel" style="color:#f1c40f;"></p>
+      <button id="cr_cashout_knop" style="background:#8e44ad; font-size:1.3em; padding:20px;" onclick="stuurCrashCashout()">Cash out</button>
+      <p id="cr_auto_tekst" style="color:#aaa; font-size:0.9em;"></p>
+    </div>
+
+    <div id="cr_klaar_zone" style="display:none;">
+      <div id="cr_klaar_multiplier" style="font-size:2.4em; font-weight:bold; margin:10px 0;"></div>
+      <p id="cr_resultaat_tekst" style="color:#f1c40f; font-size:1.2em;"></p>
+      <p id="cr_wacht_tekst" style="color:#aaa;"></p>
+      <button id="cr_volgende_knop" onclick="volgendeHand()">Volgende ronde</button>
+    </div>
+  </div>
+
+  <!-- RIDE THE BUS -->
+  <div id="ridebus_zone" style="display:none;">
+    <h3>🚌 Ride the Bus 🚌</h3>
+    <p>Chips: <b id="rb_chips">0</b> | inzet: <b id="rb_inzet">0</b></p>
+
+    <div id="rb_inzet_zone" style="display:none;">
+      <p>Hoeveel wil je inzetten?</p>
+      <input type="number" id="rb_bedrag" placeholder="bedrag" value="20">
+      <button style="background:#27ae60;" onclick="stuurRidebusInzet()">Inzetten</button>
+    </div>
+
+    <div id="rb_speel_zone" style="display:none;">
+      <div id="rb_kaarten"></div>
+      <p id="rb_vraag" style="color:#f1c40f; font-size:1.2em; font-weight:bold;"></p>
+      <div id="rb_opties"></div>
+      <button id="rb_uitbetaal_knop" style="background:#8e44ad; display:none;" onclick="stuurRidebusUitbetaal()"></button>
+      <p id="rb_ladder" style="color:#aaa; font-size:0.85em;"></p>
+    </div>
+
+    <div id="rb_klaar_zone" style="display:none;">
+      <div id="rb_kaarten_klaar"></div>
+      <p id="rb_resultaat_tekst" style="color:#f1c40f; font-size:1.2em;"></p>
+      <p id="rb_wacht_tekst" style="color:#aaa;"></p>
+      <button id="rb_volgende_knop" onclick="volgendeHand()">Volgende ronde</button>
+    </div>
+  </div>
+
+  <!-- SHOWDOWN (POKER) -->
+  <div id="showdown_zone" style="display:none;">
+    <p id="wintekst_speler" style="color:#f1c40f;"></p>
+    <button onclick="volgendeHand()">Volgende hand</button>
+  </div>
+
+  <button class="menu-knop" onclick="terugNaarMenu()">Kies Ander Spel / Menu</button>
+
+<script>
+const SPELER_ID = Number("{{ speler_id }}");
+let geselecteerdeKaartIndices = [];
+let gekozenDier = null;
+let rbHandtekening = "";
+
+function kaart_html(kaart) {
+  const isRood = kaart.includes("♥") || kaart.includes("♦") || kaart.endsWith("h") || kaart.endsWith("d");
+  return `<div class="kaart" style="${isRood ? 'color:#c0392b;' : ''}">${kaart}</div>`;
+}
+
+async function startSpel() {
+  if (SPELER_ID !== 1) return alert("Alleen de Host (Speler 1) kan het spel starten!");
+  const res = await fetch("/start_spel", { method: "POST" });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+async function kiesSpel(spel) {
+  if (SPELER_ID === 1) {
+    const res = await fetch("/kies_spel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ speler: SPELER_ID, spel: spel })
+    });
+    const data = await res.json();
+    if (!data.ok) alert(data.fout);
+  } else {
+    const res = await fetch("/suggereer_spel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ spel: spel })
+    });
+    const data = await res.json();
+    if (data.ok) alert("Suggestie verzonden naar Host!");
+  }
+}
+
+async function terugNaarMenu() {
+  await fetch("/naar_menu", { method: "POST" });
+}
+
+async function volgendeHand() {
+  await fetch("/volgende_hand", { method: "POST" });
+}
+
+async function veiligAfsluiten() {
+  await fetch(`/verlaat/${SPELER_ID}`, { method: "POST" });
+  location.reload();
+}
+
+/* POKER */
+function toonRaiseZone() {
+  document.getElementById("raise_zone").style.display = "flex";
+}
+
+async function stuurActie(actie, bedrag) {
+  const res = await fetch("/actie", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, actie: actie, bedrag: bedrag || 0 })
+  });
+  const data = await res.json();
+  if (data.ok) document.getElementById("raise_zone").style.display = "none";
+  else alert(data.fout);
+}
+
+function stuurRaise() {
+  const bedrag = parseInt(document.getElementById("raise_bedrag").value);
+  if (!bedrag || bedrag <= 0) return alert("Vul een geldig bedrag in!");
+  stuurActie("raise", bedrag);
+}
+
+/* BLACKJACK */
+async function stuurBlackjackInzet() {
+  const bedrag = parseInt(document.getElementById("bj_bedrag").value);
+  if (!bedrag || bedrag <= 0) return alert("Vul een geldig bedrag in!");
+  const res = await fetch("/blackjack_inzet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, bedrag: bedrag })
+  });
+  const data = await res.json();
+  document.getElementById("bj_inzet_status").textContent = data.ok ? "Ingezet, wachten op de andere speler..." : "Fout: " + data.fout;
+}
+
+async function stuurBlackjackActie(actie) {
+  const res = await fetch("/blackjack_actie", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, actie: actie })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+/* ANIMAL RACING */
+function kiesDier(i) {
+  gekozenDier = i;
+  document.querySelectorAll(".dier-knop").forEach(b =>
+    b.classList.toggle("gekozen", parseInt(b.dataset.index) === i));
+}
+
+async function stuurAnimalraceInzet() {
+  const bedrag = parseInt(document.getElementById("ar_bedrag").value);
+  if (gekozenDier === null) return alert("Kies eerst een dier!");
+  if (!bedrag || bedrag <= 0) return alert("Vul een geldig bedrag in!");
+  const res = await fetch("/animalrace_inzet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, dier: gekozenDier, bedrag: bedrag })
+  });
+  const data = await res.json();
+  document.getElementById("ar_inzet_status").textContent = data.ok ? "Ingezet, wachten op de andere speler..." : "Fout: " + data.fout;
+}
+
+/* LIAR'S BAR */
+function toggleKaartSelectie(idx, el) {
+  const pos = geselecteerdeKaartIndices.indexOf(idx);
+  if (pos > -1) {
+    geselecteerdeKaartIndices.splice(pos, 1);
+    el.classList.remove("gekozen");
+  } else {
+    geselecteerdeKaartIndices.push(idx);
+    el.classList.add("gekozen");
+  }
+}
+
+async function stuurLiarsBarSpeel() {
+  if (geselecteerdeKaartIndices.length === 0) return alert("Selecteer minstens 1 kaart!");
+  const res = await fetch("/liarsbar_speel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, indices: geselecteerdeKaartIndices })
+  });
+  const data = await res.json();
+  if (data.ok) geselecteerdeKaartIndices = [];
+  else alert(data.fout);
+}
+
+async function stuurLiarsBarCall() {
+  const res = await fetch("/liarsbar_call", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+async function stuurLiarsBarCoinflip(keuze) {
+  const res = await fetch("/liarsbar_coinflip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, keuze: keuze })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+/* ROULETTE */
+async function stuurRouletteInzet(type, waarde) {
+  const bedrag = parseInt(document.getElementById("rt_bedrag").value);
+  if (!bedrag || bedrag <= 0) return alert("Vul een geldig bedrag in!");
+  const res = await fetch("/roulette_inzet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, type: type, waarde: waarde, bedrag: bedrag })
+  });
+  const data = await res.json();
+  const foutEl = document.getElementById("rt_fout");
+  clearTimeout(window.rtFoutTimer);
+  if (data.ok) {
+    foutEl.style.display = "none";
+    document.getElementById("rt_inzet_status").textContent = `Inzet geplaatst op ${waarde} (${bedrag} chips)`;
+  } else {
+    document.getElementById("rt_inzet_status").textContent = "";
+    foutEl.textContent = "⚠️ " + data.fout;
+    foutEl.style.display = "block";
+    window.rtFoutTimer = setTimeout(() => { foutEl.style.display = "none"; }, 6000);
+    alert(data.fout);
+  }
+}
+
+function stuurRouletteGetalInzet() {
+  const getal = document.getElementById("rt_getal").value;
+  if (getal === "" || getal < 0 || getal > 36) return alert("Kies een getal tussen 0 en 36!");
+  stuurRouletteInzet('getal', getal);
+}
+
+async function bevestigRouletteKlaar() {
+  await fetch("/roulette_bevestig", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID })
+  });
+  document.getElementById("rt_inzet_status").textContent = "Inzetten bevestigd! Wachten op de draai...";
+}
+
+/* CRASH */
+let crashSync = null;
+let crashTimers = [];
+
+function crashMultiplier() {
+  if (!crashSync) return 0.1;
+  const t = crashSync.verstreken + (performance.now() - crashSync.ontvangen) / 1000;
+  if (t <= 0) return crashSync.start;
+  return Math.floor(crashSync.start * Math.exp(crashSync.groei * t) * 100) / 100;
+}
+
+function crashTik() {
+  if (!crashSync || crashSync.fase !== "lopend") return;
+  const t = crashSync.verstreken + (performance.now() - crashSync.ontvangen) / 1000;
+  const m = crashMultiplier();
+  const multEl = document.getElementById("cr_multiplier");
+  const knop = document.getElementById("cr_cashout_knop");
+  const afteltEl = document.getElementById("cr_aftel");
+  if (!multEl) return;
+  multEl.textContent = m.toFixed(2) + "x";
+  if (t < 0) {
+    afteltEl.textContent = `Start over ${Math.ceil(-t)}...`;
+    knop.disabled = true;
+    knop.textContent = "Cash out";
+  } else {
+    afteltEl.textContent = "";
+    const actief = crashSync.status === "spelen";
+    knop.disabled = !actief;
+    knop.textContent = actief ? `Cash out (${Math.floor(crashSync.inzet * m)})` : "Uitbetaald";
+  }
+}
+
+function zetCrashLus(aan) {
+  if (aan && crashTimers.length === 0) {
+    crashTimers.push(setInterval(crashTik, 60));
+    crashTimers.push(setInterval(ververs, 250));
+  } else if (!aan && crashTimers.length) {
+    crashTimers.forEach(clearInterval);
+    crashTimers = [];
+  }
+}
+
+async function stuurCrashInzet() {
+  const bedrag = parseInt(document.getElementById("cr_bedrag").value);
+  const auto = document.getElementById("cr_auto").value;
+  if (!bedrag || bedrag <= 0) return alert("Vul een geldig bedrag in!");
+  const res = await fetch("/crash_inzet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, bedrag: bedrag, auto: auto === "" ? null : parseFloat(auto) })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+async function stuurCrashCashout() {
+  const res = await fetch("/crash_cashout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+/* RIDE THE BUS */
+async function stuurRidebusInzet() {
+  const bedrag = parseInt(document.getElementById("rb_bedrag").value);
+  if (!bedrag || bedrag <= 0) return alert("Vul een geldig bedrag in!");
+  const res = await fetch("/ridebus_inzet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, bedrag: bedrag })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+async function stuurRidebusGok(keuze) {
+  const res = await fetch("/ridebus_gok", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID, keuze: keuze })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+async function stuurRidebusUitbetaal() {
+  const res = await fetch("/ridebus_uitbetaal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ speler: SPELER_ID })
+  });
+  const data = await res.json();
+  if (!data.ok) alert(data.fout);
+}
+
+function ridebusKaartenHtml(kaarten) {
+  return (kaarten || []).map(k => kaart_html(k)).join("");
+}
+
+/* VERVERS LOOP */
+async function ververs() {
+  try {
+    const res = await fetch(`/status/${SPELER_ID}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const mij = data.spelers[SPELER_ID];
+    if (mij.donatie) {
+      const banner = document.getElementById("donatie_banner");
+      banner.style.display = "block";
+      setTimeout(() => { banner.style.display = "none"; }, 7000);
+    }
+    if (data.fase !== "crash" || !data.crash || data.crash.fase !== "lopend") zetCrashLus(false);
+
+    document.getElementById("ingelogd_als").textContent = mij.ingelogd_als ? "ingelogd als " + mij.ingelogd_als : "";
+
+    document.getElementById("wacht_zone").style.display = "none";
+    document.getElementById("spel_zone").style.display = "none";
+    document.getElementById("blackjack_zone").style.display = "none";
+    document.getElementById("animalrace_zone").style.display = "none";
+    document.getElementById("liarsbar_zone").style.display = "none";
+    document.getElementById("roulette_zone").style.display = "none";
+    document.getElementById("ridebus_zone").style.display = "none";
+    document.getElementById("crash_zone").style.display = "none";
+    document.getElementById("showdown_zone").style.display = "none";
+
+    // 1. WACHTEN
+    if (data.fase === "wachten") {
+      document.getElementById("wacht_zone").style.display = "block";
+      const anderePid = SPELER_ID === 1 ? 2 : 1;
+      const andereVerbonden = data.spelers[anderePid].verbonden;
+
+      document.getElementById("wachtbericht").textContent = andereVerbonden ? "Beide spelers verbonden." : "Wachten op de andere speler...";
+
+      const menuEl = document.getElementById("menu_zone");
+      const knoppenEl = document.getElementById("spel_knoppen");
+      const startEl = document.getElementById("start_knop");
+      const menuTitel = document.getElementById("menu_titel");
+
+      if (andereVerbonden) {
+        menuEl.style.display = "block";
+        knoppenEl.innerHTML = "";
+        
+        if (SPELER_ID === 1) {
+          menuTitel.innerHTML = "<b>Kies een spel (Host):</b>";
+          startEl.style.display = data.spel_keuze ? "block" : "none";
+        } else {
+          menuTitel.innerHTML = "<b>Suggestie indienen (Speler 2):</b>" + (data.suggestie_spel ? ` (P2 suggestie: ${data.spellen[data.suggestie_spel].naam})` : "");
+          startEl.style.display = "none";
+        }
+
+        for (const [key, spel] of Object.entries(data.spellen)) {
+          const gekozen = data.spel_keuze === key;
+          const gesuggereerd = data.suggestie_spel === key;
+          let extra = "";
+          if (gekozen) extra = " (GEKOZEN)";
+          else if (gesuggereerd) extra = " (P2 suggestie)";
+          
+          knoppenEl.innerHTML += `<button onclick="kiesSpel('${key}')" style="${gekozen ? 'background:#27ae60;' : ''}">${spel.naam}${extra}</button>`;
+        }
+      } else {
+        menuEl.style.display = "none";
+        startEl.style.display = "none";
+      }
+      return;
+    }
+
+    // 2. BLACKJACK
+    if (data.fase === "blackjack" && data.blackjack) {
+      document.getElementById("blackjack_zone").style.display = "block";
+      const bj = data.blackjack;
+      const mijnBj = bj.spelers[SPELER_ID];
+
+      document.getElementById("bj_chips").textContent = mij.chips;
+      document.getElementById("bj_inzet").textContent = mijnBj ? mijnBj.inzet : 0;
+
+      if (bj.fase === "inzetten") {
+        document.getElementById("bj_inzet_zone").style.display = "block";
+        document.getElementById("bj_spel_zone").style.display = "none";
+        document.getElementById("bj_afgelopen_zone").style.display = "none";
+      } else if (bj.fase === "spelen") {
+        document.getElementById("bj_inzet_zone").style.display = "none";
+        document.getElementById("bj_spel_zone").style.display = "block";
+        document.getElementById("bj_afgelopen_zone").style.display = "none";
+
+        const handEl = document.getElementById("bj_mijn_hand");
+        handEl.innerHTML = "";
+        (mijnBj.hand || []).forEach(k => handEl.innerHTML += kaart_html(k));
+
+        const mijnBeurt = bj.beurt === SPELER_ID;
+        document.getElementById("bj_status_tekst").textContent = mijnBeurt ? "Jij bent aan de beurt!" : "Wachten op de andere speler...";
+        document.getElementById("bj_hit_knop").disabled = !mijnBeurt;
+        document.getElementById("bj_stand_knop").disabled = !mijnBeurt;
+      } else if (bj.fase === "afgelopen") {
+        document.getElementById("bj_inzet_zone").style.display = "none";
+        document.getElementById("bj_spel_zone").style.display = "none";
+        document.getElementById("bj_afgelopen_zone").style.display = "block";
+        document.getElementById("bj_resultaat_tekst").textContent = mijnBj.resultaat || "Ronde afgelopen.";
+      }
+      return;
+    }
+
+    // 3. ANIMAL RACING
+    if (data.fase === "animalrace" && data.animalrace) {
+      document.getElementById("animalrace_zone").style.display = "block";
+      const ar = data.animalrace;
+      const mijnAr = ar.spelers[SPELER_ID];
+
+      if (ar.fase === "inzetten") {
+        document.getElementById("ar_inzet_zone").style.display = "block";
+        document.getElementById("ar_race_zone").style.display = "none";
+        document.getElementById("ar_afgelopen_zone").style.display = "none";
+
+        const knoppenEl = document.getElementById("ar_dier_knoppen");
+        knoppenEl.innerHTML = "";
+        ar.dieren.forEach((d, idx) => {
+          knoppenEl.innerHTML += `<button class="dier-knop ${gekozenDier === idx ? 'gekozen' : ''}" data-index="${idx}" onclick="kiesDier(${idx})">${d.emoji} ${d.naam}</button>`;
+        });
+      } else if (ar.fase === "racen") {
+        document.getElementById("ar_inzet_zone").style.display = "none";
+        document.getElementById("ar_race_zone").style.display = "block";
+        document.getElementById("ar_afgelopen_zone").style.display = "none";
+
+        const gekozenObj = ar.dieren[mijnAr.dier];
+        document.getElementById("ar_mijn_dier").textContent = gekozenObj ? `${gekozenObj.emoji} ${gekozenObj.naam}` : "-";
+        document.getElementById("ar_chips").textContent = mij.chips;
+        document.getElementById("ar_inzet").textContent = mijnAr.inzet;
+      } else if (ar.fase === "afgelopen") {
+        document.getElementById("ar_inzet_zone").style.display = "none";
+        document.getElementById("ar_race_zone").style.display = "none";
+        document.getElementById("ar_afgelopen_zone").style.display = "block";
+        document.getElementById("ar_resultaat_tekst").textContent = mijnAr.resultaat || "Race afgelopen.";
+      }
+      return;
+    }
+
+    // 4. ROULETTE
+    if (data.fase === "roulette" && data.roulette) {
+      document.getElementById("roulette_zone").style.display = "block";
+      const rt = data.roulette;
+      const mijnRt = rt.spelers[SPELER_ID];
+
+      document.getElementById("rt_chips").textContent = mij.chips;
+
+      if (rt.fase === "inzetten" || rt.fase === "draaien") {
+        document.getElementById("rt_inzet_fase").style.display = "block";
+        document.getElementById("rt_uitslag_fase").style.display = "none";
+      } else if (rt.fase === "afgelopen") {
+        document.getElementById("rt_inzet_fase").style.display = "none";
+        document.getElementById("rt_uitslag_fase").style.display = "block";
+        document.getElementById("rt_resultaat_tekst").textContent = mijnRt.resultaat;
+      }
+      return;
+    }
+
+    // 5. LIAR'S BAR
+    if (data.fase === "liarsbar" && data.liarsbar) {
+      document.getElementById("liarsbar_zone").style.display = "block";
+      const lb = data.liarsbar;
+      const mijnLb = lb.spelers[SPELER_ID];
+
+      document.getElementById("lb_mijn_doel").textContent = lb.doel_kaart;
+      const mijnBeurt = lb.beurt === SPELER_ID;
+
+      if (lb.fase === "spelen") {
+        document.getElementById("lb_speel_fase").style.display = "block";
+        document.getElementById("lb_coinflip_fase").style.display = "none";
+
+        const handEl = document.getElementById("lb_mijn_hand_knoppen");
+        handEl.innerHTML = "";
+        (mijnLb.hand || []).forEach((k, idx) => {
+          const gekozenClass = geselecteerdeKaartIndices.includes(idx) ? "gekozen" : "";
+          handEl.innerHTML += `<div class="kaart ${gekozenClass}" onclick="toggleKaartSelectie(${idx}, this)">${k}</div>`;
+        });
+
+        document.getElementById("lb_speel_knop").disabled = !mijnBeurt;
+        document.getElementById("lb_call_knop").disabled = !mijnBeurt || lb.vorige_speler === null;
+      } else if (lb.fase === "coinflip") {
+        document.getElementById("lb_speel_fase").style.display = "none";
+        document.getElementById("lb_coinflip_fase").style.display = mijnBeurt ? "block" : "none";
+      }
+      return;
+    }
+
+    // 6. RIDE THE BUS
+    if (data.fase === "ridebus" && data.ridebus) {
+      document.getElementById("ridebus_zone").style.display = "block";
+      const rb = data.ridebus;
+      const mijnRb = rb.spelers[SPELER_ID];
+
+      document.getElementById("rb_chips").textContent = mij.chips;
+      document.getElementById("rb_inzet").textContent = mijnRb.inzet;
+
+      const inzetZone = document.getElementById("rb_inzet_zone");
+      const speelZone = document.getElementById("rb_speel_zone");
+      const klaarZone = document.getElementById("rb_klaar_zone");
+      inzetZone.style.display = "none";
+      speelZone.style.display = "none";
+      klaarZone.style.display = "none";
+
+      if (rb.fase === "inzetten" && mijnRb.status === "wacht") {
+        inzetZone.style.display = "block";
+      } else if (rb.fase === "inzetten") {
+        klaarZone.style.display = "block";
+        document.getElementById("rb_kaarten_klaar").innerHTML = "";
+        document.getElementById("rb_resultaat_tekst").textContent = "Inzet geplaatst.";
+        document.getElementById("rb_wacht_tekst").textContent = "Wachten op de andere speler...";
+        document.getElementById("rb_volgende_knop").style.display = "none";
+      } else if (mijnRb.status === "spelen") {
+        speelZone.style.display = "block";
+        document.getElementById("rb_kaarten").innerHTML = ridebusKaartenHtml(mijnRb.kaarten);
+        document.getElementById("rb_vraag").textContent = `Vraag ${mijnRb.stap + 1}/4: ${mijnRb.vraag.titel}`;
+
+        const handtekening = `${mijnRb.stap}|${mijnRb.uitbetaal_waarde}`;
+        if (handtekening !== rbHandtekening) {
+          rbHandtekening = handtekening;
+          const optiesEl = document.getElementById("rb_opties");
+          optiesEl.innerHTML = "";
+          mijnRb.vraag.opties.forEach(o => {
+            const b = document.createElement("button");
+            b.textContent = o.charAt(0).toUpperCase() + o.slice(1);
+            b.onclick = () => stuurRidebusGok(o);
+            optiesEl.appendChild(b);
+          });
+          const uitKnop = document.getElementById("rb_uitbetaal_knop");
+          if (mijnRb.uitbetaal_waarde > 0) {
+            uitKnop.style.display = "block";
+            uitKnop.textContent = `Uitbetalen (${mijnRb.uitbetaal_waarde} chips)`;
+          } else {
+            uitKnop.style.display = "none";
+          }
+        }
+        document.getElementById("rb_ladder").textContent =
+          "Uitbetaling na elke vraag: " + rb.multipliers.map(m => m + "x").join(" → ");
+      } else {
+        rbHandtekening = "";
+        klaarZone.style.display = "block";
+        document.getElementById("rb_kaarten_klaar").innerHTML = ridebusKaartenHtml(mijnRb.kaarten);
+        document.getElementById("rb_resultaat_tekst").textContent = mijnRb.resultaat || "";
+        const afgelopen = rb.fase === "afgelopen";
+        document.getElementById("rb_wacht_tekst").textContent = afgelopen ? "" : "Wachten tot de andere speler klaar is...";
+        document.getElementById("rb_volgende_knop").style.display = afgelopen ? "block" : "none";
+      }
+      return;
+    }
+
+    // 7. CRASH
+    if (data.fase === "crash" && data.crash) {
+      document.getElementById("crash_zone").style.display = "block";
+      const cr = data.crash;
+      const mijnCr = cr.spelers[SPELER_ID];
+
+      document.getElementById("cr_chips").textContent = mij.chips;
+      document.getElementById("cr_inzet").textContent = mijnCr.inzet;
+
+      const inzetZone = document.getElementById("cr_inzet_zone");
+      const loopZone = document.getElementById("cr_loop_zone");
+      const klaarZone = document.getElementById("cr_klaar_zone");
+      inzetZone.style.display = "none";
+      loopZone.style.display = "none";
+      klaarZone.style.display = "none";
+
+      crashSync = {
+        verstreken: cr.verstreken === null ? -1 : cr.verstreken, ontvangen: performance.now(),
+        groei: cr.groei, start: cr.start, inzet: mijnCr.inzet, status: mijnCr.status, fase: cr.fase, auto: mijnCr.auto,
+      };
+
+      if (cr.fase === "inzetten" && mijnCr.status === "wacht") {
+        inzetZone.style.display = "block";
+      } else if (cr.fase === "inzetten") {
+        klaarZone.style.display = "block";
+        document.getElementById("cr_klaar_multiplier").textContent = "";
+        document.getElementById("cr_resultaat_tekst").textContent = "Inzet geplaatst.";
+        document.getElementById("cr_wacht_tekst").textContent = "Wachten op de andere speler...";
+        document.getElementById("cr_volgende_knop").style.display = "none";
+      } else if (cr.fase === "lopend") {
+        loopZone.style.display = "block";
+        document.getElementById("cr_auto_tekst").textContent =
+          mijnCr.auto ? `Automatische cash-out op ${Number(mijnCr.auto).toFixed(2)}x` : "";
+        zetCrashLus(true);
+        crashTik();
+        if (mijnCr.status === "uitbetaald") {
+          document.getElementById("cr_auto_tekst").textContent = mijnCr.resultaat;
+        }
+      } else if (cr.fase === "afgelopen") {
+        klaarZone.style.display = "block";
+        document.getElementById("cr_klaar_multiplier").textContent = "💥 " + Number(cr.crash_punt).toFixed(2) + "x";
+        document.getElementById("cr_resultaat_tekst").textContent = mijnCr.resultaat || "";
+        document.getElementById("cr_wacht_tekst").textContent = "";
+        document.getElementById("cr_volgende_knop").style.display = "block";
+      }
+      return;
+    }
+
+    // 8. POKER
+    if (["preflop", "flop", "turn", "river"].includes(data.fase)) {
+      document.getElementById("spel_zone").style.display = "block";
+      const handEl = document.getElementById("mijn_hand");
+      handEl.innerHTML = "";
+      (mij.hand || []).forEach(k => handEl.innerHTML += kaart_html(k));
+
+      document.getElementById("mijn_handtype").textContent = mij.handtype || "";
+      document.getElementById("mijn_chips").textContent = mij.chips;
+      document.getElementById("mijn_inzet").textContent = mij.street_bet;
+      document.getElementById("pot").textContent = data.pot;
+
+      const mijnBeurt = (data.beurt === SPELER_ID);
+      document.getElementById("timer_zone").textContent = mijnBeurt ? `Jij bent aan de beurt!` : "Wacht op de andere speler...";
+
+      document.getElementById("raise_knop").disabled = !mijnBeurt || mij.chips === 0;
+      document.getElementById("check_knop").disabled = !mijnBeurt;
+      document.getElementById("fold_knop").disabled = !mijnBeurt;
+      document.getElementById("check_knop").textContent = data.huidige_call > 0 ? `Call (${data.huidige_call})` : "Check";
+      return;
+    }
+
+    if (data.fase === "showdown") {
+      document.getElementById("showdown_zone").style.display = "block";
+      document.getElementById("wintekst_speler").textContent = data.wintekst;
+      return;
+    }
+
+  } catch (e) {
+    console.error("Fout bij verversen:", e);
+  }
+}
+
+setInterval(ververs, 1000);
+ververs();
+</script>
+</body>
+</html>

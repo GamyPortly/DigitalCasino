@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inloggen / Registreren</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #121212; color: #fff; text-align: center; padding: 20px; }
+    .box { background: #1e1e1e; max-width: 300px; margin: 0 auto; padding: 20px; border-radius: 8px; }
+    input { width: 90%; padding: 10px; margin: 10px 0; border-radius: 4px; border: 1px solid #444; background: #2a2a2a; color: white; }
+    button { width: 95%; padding: 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 5px; }
+    button.reg { background: #17a2b8; }
+    p.fout { color: #dc3545; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>Speler {{ pid }} Login</h2>
+    <input type="text" id="gebruikersnaam" placeholder="Gebruikersnaam">
+    <input type="password" id="code" placeholder="Pincode">
+    <button onclick="login()">Inloggen</button>
+    <button class="reg" onclick="registreer()">Nieuw Account</button>
+    <p class="fout" id="fout-msg"></p>
+    <p><a href="/speler/{{ pid }}?token={{ token }}" style="color: #ccc;">Terug naar spel</a></p>
+  </div>
+
+  <script>
+    const SPELER_ID = Number("{{ speler_id }}");
+    const TOKEN = "{{ token }}";
+
+    async function login() {
+      const u = document.getElementById('gebruikersnaam').value;
+      const c = document.getElementById('code').value;
+      const res = await fetch(`/login/${SPELER_ID}?token=${TOKEN}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gebruikersnaam: u, code: c })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.href = `/speler/${SPELER_ID}?token=${TOKEN}`;
+      } else {
+        document.getElementById('fout-msg').innerText = data.fout;
+      }
+    }
+
+    async function registreer() {
+      const u = document.getElementById('gebruikersnaam').value;
+      const c = document.getElementById('code').value;
+      const res = await fetch(`/registreer/${SPELER_ID}?token=${TOKEN}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gebruikersnaam: u, code: c })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.href = `/speler/${SPELER_ID}?token=${TOKEN}`;
+      } else {
+        document.getElementById('fout-msg').innerText = data.fout;
+      }
+    }
+  </script>
+</body>
+</html>

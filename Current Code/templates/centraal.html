@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>Centraal Scherm - Digital Casino</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    padding: 20px;
+    background: radial-gradient(circle at center, #1b4d3e 0%, #0e2920 100%);
+    color: white;
+    min-height: 100vh;
+    box-sizing: border-box;
+    margin: 0;
+  }
+  h1 { margin-top: 15px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+  .qr-rij { display: flex; justify-content: center; gap: 40px; margin-top: 20px; }
+  .qr-blok { border: 1px solid rgba(255,255,255,0.2); padding: 15px; background: rgba(0,0,0,0.4); border-radius: 8px; backdrop-filter: blur(5px); }
+  .qr-blok img { width: 160px; height: 160px; }
+  .verbonden { color: #2ecc71; font-weight: bold; }
+  .niet-verbonden { color: #e67e22; }
+  .subtitel { color: #d0d0d0; margin-bottom: 20px; font-size: 1.1em; }
+  
+  .kaarten-rij { margin: 15px 0; }
+  .kaart { display: inline-block; width: 55px; height: 75px; border: 1px solid #aaa; margin: 3px; line-height: 75px; font-size: 1.3em; background: #fff; color: #000; border-radius: 5px; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+  .kaart.rood { color: #c0392b; }
+  .ladder { color: #aaa; font-size: 0.95em; margin: 10px 0 20px; }
+  .ladder .actief { color: #f1c40f; font-weight: bold; }
+  .pot { font-size: 1.3em; margin-bottom: 20px; color: #f1c40f; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+  
+  .spelers-rij { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
+  .speler-kaart { border: 1px solid rgba(255,255,255,0.2); padding: 15px 25px; min-width: 160px; background: rgba(0,0,0,0.4); border-radius: 8px; backdrop-filter: blur(5px); }
+  .speler-kaart.aan_de_beurt { border: 3px solid #f1c40f; box-shadow: 0 0 15px #f1c40f; }
+  .gefold-label { color: #e74c3c; font-weight: bold; }
+  
+  /* Animal Racing Stijlen & Animaties */
+  .baan-rij { display: flex; align-items: center; max-width: 850px; margin: 10px auto; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+  .baan-naam { width: 180px; text-align: left; padding-right: 10px; font-weight: bold; font-size: 0.95em; }
+  .baan-naam span { display: block; font-size: 0.8em; color: #aaa; font-weight: normal; }
+  .baan { position: relative; flex: 1; height: 45px; border: 1px solid #555; border-right: 4px solid #f1c40f; background: rgba(0,0,0,0.5); border-radius: 4px; overflow: hidden; }
+  .baan-dier { position: absolute; top: 2px; left: 0; font-size: 2em; line-height: 40px; transition: left 1s linear; }
+  
+  @keyframes winBounce {
+    0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+    50% { transform: translateY(-12px) scale(1.25) rotate(10deg); }
+  }
+  .baan-rij.winnaar { background: rgba(39, 174, 96, 0.3); border-color: #2ecc71; }
+  .baan-rij.winnaar .baan-dier { animation: winBounce 0.7s infinite ease-in-out; filter: drop-shadow(0 0 12px #2ecc71); }
+
+  @keyframes loseShake {
+    0%, 100% { transform: translateX(0) rotate(0deg); }
+    25% { transform: translateX(-4px) rotate(-6deg); }
+    75% { transform: translateX(4px) rotate(6deg); }
+  }
+  .baan-rij.verliezer { opacity: 0.75; }
+  .baan-rij.verliezer .baan-dier { animation: loseShake 0.4s infinite ease-in-out; }
+
+  /* Roulette Rad Stijlen */
+  .roulette-container { position: relative; width: min(440px, 90vw); aspect-ratio: 1; margin: 20px auto; filter: drop-shadow(0 14px 22px rgba(0,0,0,0.65)); }
+  .roulette-container svg { width: 100%; height: 100%; display: block; }
+  .roulette-uitslag { display: flex; justify-content: center; align-items: center; gap: 14px; min-height: 1.6em; font-size: 2em; margin-top: 15px; font-weight: bold; color: #f1c40f; }
+  .rt-badge { display: inline-block; min-width: 1.7em; padding: 2px 6px; border-radius: 50%; color: #fff; border: 3px solid #d4af37; line-height: 1.4; }
+  .rt-badge.rood { background: #b3141c; }
+  .rt-badge.zwart { background: #141414; }
+  .rt-badge.groen { background: #17803d; }
+</style>
+</head>
+<body>
+  <h1>Digital Casino 🎲</h1>
+  <p class="subtitel" id="hoofd_subtitel">Scan je QR-code met je GSM om te verbinden</p>
+
+  <!-- QR SCHERM -->
+  <div id="qr_zone" class="qr-rij">
+    <div class="qr-blok">
+      <h3>Speler 1 (Host 👑)</h3>
+      <img src="/static/qr_speler1.png" alt="QR speler 1">
+      <p id="status1" class="niet-verbonden">nog niet verbonden</p>
+    </div>
+    <div class="qr-blok">
+      <h3>Speler 2</h3>
+      <img src="/static/qr_speler2.png" alt="QR speler 2">
+      <p id="status2" class="niet-verbonden">nog niet verbonden</p>
+    </div>
+  </div>
+
+  <!-- POKER SCHERM -->
+  <div id="poker_zone" style="display:none;">
+    <h2>Poker (Texas Hold'em)</h2>
+    <div class="kaarten-rij" id="community"></div>
+    <div class="pot">Pot: <span id="pot">0</span> chips</div>
+    <div class="spelers-rij" id="poker_spelers"></div>
+    <div id="poker_timer" style="font-size: 1.4em; margin-top: 15px; color: #f1c40f;"></div>
+  </div>
+
+  <!-- BLACKJACK SCHERM -->
+  <div id="blackjack_zone" style="display:none;">
+    <h2>Blackjack</h2>
+    <p id="bj_fase_tekst" style="color: #aaa;"></p>
+    <div class="kaarten-rij">
+      <p>Dealer Hand:</p>
+      <div id="bj_dealer_hand"></div>
+    </div>
+    <div class="spelers-rij" id="bj_spelers"></div>
+  </div>
+
+  <!-- ANIMAL RACING SCHERM -->
+  <div id="animalrace_zone" style="display:none;">
+    <h2>🐾 Animal Racing 🐾</h2>
+    <p id="ar_fase_tekst" style="color: #f1c40f; font-size: 1.2em;"></p>
+    <div id="ar_banen" style="margin-top: 20px;"></div>
+    <div class="spelers-rij" id="ar_spelers" style="margin-top:20px;"></div>
+  </div>
+
+  <!-- LIAR'S BAR SCHERM -->
+  <div id="liarsbar_zone" style="display:none;">
+    <h2>Liar's Bar</h2>
+    <h3 style="color:#e67e22;">Doelkaart van de ronde: <span id="lb_doel_kaart"></span></h3>
+    <p id="lb_melding" style="font-size: 1.1em;"></p>
+    <div class="pot">Kaarten op tafel: <span id="lb_tafel_aantal">0</span></div>
+    <div class="spelers-rij" id="lb_spelers"></div>
+    <div id="lb_reveal_zone" style="margin-top:20px; font-size:1.2em; background:rgba(0,0,0,0.5); padding:15px; border-radius:8px; display:none;"></div>
+  </div>
+
+  <!-- ROULETTE SCHERM -->
+  <div id="roulette_zone" style="display:none;">
+    <h2>🎰 Roulette 🎰</h2>
+    <p id="rt_fase_tekst" style="color: #aaa;">Plaats je inzetten op je GSM...</p>
+    <div class="roulette-container">
+      <svg id="rt_svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Roulette rad"></svg>
+    </div>
+    <div class="roulette-uitslag" id="rt_uitslag"></div>
+    <div class="spelers-rij" id="rt_spelers"></div>
+  </div>
+
+  <!-- RIDE THE BUS SCHERM -->
+  <div id="ridebus_zone" style="display:none;">
+    <h2>🚌 Ride the Bus 🚌</h2>
+    <p id="rb_fase_tekst" style="color:#f1c40f; font-size:1.2em;"></p>
+    <p class="ladder" id="rb_ladder"></p>
+    <div class="spelers-rij" id="rb_spelers"></div>
+  </div>
+
+  <!-- CRASH SCHERM -->
+  <div id="crash_zone" style="display:none;">
+    <h2>🚀 Crash 🚀</h2>
+    <p id="cr_fase_tekst" style="color:#f1c40f; font-size:1.2em;"></p>
+    <div id="cr_grote_multiplier" style="font-size:4.5em; font-weight:bold; color:#2ecc71; text-shadow:0 2px 8px rgba(0,0,0,0.5);">0.10x</div>
+    <canvas id="cr_canvas" width="640" height="260" style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.2); border-radius:8px; max-width:95%;"></canvas>
+    <div class="spelers-rij" id="cr_spelers"></div>
+  </div>
+
+  <div id="wintekst" style="font-size: 1.4em; margin-top: 20px; color: #2ecc71; font-weight: bold; text-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>
+  <p id="startbericht" style="font-size:1.2em; margin-top:20px; color:#f1c40f;"></p>
+
+<script>
+function verbergAlles() {
+  document.getElementById("qr_zone").style.display = "none";
+  document.getElementById("poker_zone").style.display = "none";
+  document.getElementById("blackjack_zone").style.display = "none";
+  document.getElementById("animalrace_zone").style.display = "none";
+  document.getElementById("liarsbar_zone").style.display = "none";
+  document.getElementById("roulette_zone").style.display = "none";
+  document.getElementById("ridebus_zone").style.display = "none";
+  document.getElementById("crash_zone").style.display = "none";
+}
+
+/* CRASH MET RAKET-ANIMATIE */
+let crashSync = null;
+let crashTimers = [];
+let crashValStartTijd = null;
+
+function crashT() {
+  return crashSync.verstreken + (performance.now() - crashSync.ontvangen) / 1000;
+}
+
+function tekenRaket(ctx, x, y, hoek, heeftVuur, schaal = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(hoek);
+  ctx.scale(schaal, schaal);
+
+  // 1. Vuur onder de raket (alleen als hij vliegt en NIET gecrasht is)
+  if (heeftVuur) {
+    const flikkering = Math.random() * 8;
+    ctx.beginPath();
+    ctx.fillStyle = "#ff4500";
+    ctx.moveTo(-8, 15);
+    ctx.quadraticCurveTo(0, 35 + flikkering, 8, 15);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.fillStyle = "#ffcc00";
+    ctx.moveTo(-5, 15);
+    ctx.quadraticCurveTo(0, 25 + flikkering * 0.5, 5, 15);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 2. Vinnen
+  ctx.fillStyle = "#c0392b";
+  ctx.beginPath();
+  ctx.moveTo(-10, 5);
+  ctx.lineTo(-20, 18);
+  ctx.lineTo(-10, 15);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(10, 5);
+  ctx.lineTo(20, 18);
+  ctx.lineTo(10, 15);
+  ctx.closePath();
+  ctx.fill();
+
+  // 3. Romp
+  const rompGrad = ctx.createLinearGradient(-12, 0, 12, 0);
+  rompGrad.addColorStop(0, "#e0e0e0");
+  rompGrad.addColorStop(0.5, "#ffffff");
+  rompGrad.addColorStop(1, "#b0b0b0");
+  ctx.fillStyle = rompGrad;
+
+  ctx.beginPath();
+  ctx.moveTo(0, -30);
+  ctx.bezierCurveTo(15, -15, 15, 10, 12, 15);
+  ctx.lineTo(-12, 15);
+  ctx.bezierCurveTo(-15, 10, -15, -15, 0, -30);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#7f8c8d";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // 4. Neuskegel
+  ctx.beginPath();
+  ctx.fillStyle = "#e74c3c";
+  ctx.moveTo(0, -30);
+  ctx.bezierCurveTo(8, -20, 8, -15, 8, -12);
+  ctx.lineTo(-8, -12);
+  ctx.bezierCurveTo(-8, -15, -8, -20, 0, -30);
+  ctx.closePath();
+  ctx.fill();
+
+  // 5. Patrijspoort
+  ctx.beginPath();
+  ctx.arc(0, -3, 6, 0, Math.PI * 2);
+  ctx.fillStyle = "#3498db";
+  ctx.fill();
+  ctx.strokeStyle = "#ecf0f1";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(-2, -5, 2, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function crashTekenen() {
+  if (!crashSync) return;
+  const canvas = document.getElementById("cr_canvas");
+  const multEl = document.getElementById("cr_grote_multiplier");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const g = crashSync.groei;
+  const st = crashSync.start;
+
+  let t, m, gecrasht = false;
+  if (crashSync.fase === "afgelopen") {
+    t = crashSync.crash_verstreken; 
+    m = crashSync.crash_punt; 
+    gecrasht = true;
+  } else if (crashSync.fase === "lopend") {
+    t = crashT(); 
+    m = t > 0 ? Math.floor(st * Math.exp(g * t) * 100) / 100 : st;
+    crashValStartTijd = null;
+  } else { 
+    t = 0; 
+    m = st; 
+    crashValStartTijd = null;
+  }
+
+  multEl.textContent = m.toFixed(2) + "x";
+  multEl.style.color = gecrasht ? "#e74c3c" : "#2ecc71";
+
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  const tMax = Math.max(8, t * 1.1);
+  const mMax = Math.max(2, m * 1.15);
+
+  const stappen = 100;
+  const punten = [];
+  for (let i = 0; i <= stappen; i++) {
+    const ti = Math.max(0, t) * i / stappen;
+    const px = (ti / tMax) * (W - 40) + 20;
+    const py = H - 20 - ((st * Math.exp(g * ti) - st) / (mMax - st)) * (H - 40);
+    punten.push({ x: px, y: py });
+  }
+
+  if (punten.length > 1) {
+    ctx.strokeStyle = gecrasht ? "rgba(231, 76, 60, 0.6)" : "#2ecc71";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(punten[0].x, punten[0].y);
+    for (let i = 1; i < punten.length; i++) {
+      ctx.lineTo(punten[i].x, punten[i].y);
+    }
+    ctx.stroke();
+  }
+
+  const laatst = punten[punten.length - 1];
+  const eenNaLaatst = punten[Math.max(0, punten.length - 3)];
+  let dx = laatst.x - eenNaLaatst.x;
+  let dy = laatst.y - eenNaLaatst.y;
+  let stijgHoek = Math.atan2(dy, dx) + Math.PI / 2;
+
+  if (!gecrasht) {
+    tekenRaket(ctx, laatst.x, laatst.y, stijgHoek, true);
+  } else {
+    if (!crashValStartTijd) crashValStartTijd = performance.now();
+    const valTijd = (performance.now() - crashValStartTijd) / 1000;
+    const valSnelheid = 350;
+    const valY = Math.min(H - 15, laatst.y + 0.5 * valSnelheid * Math.pow(valTijd, 1.8));
+    const kantelHoek = Math.min(Math.PI, stijgHoek + valTijd * 6);
+
+    if (valTijd < 0.6) {
+      ctx.save();
+      ctx.translate(laatst.x, laatst.y);
+      ctx.fillStyle = `rgba(231, 76, 60, ${1 - valTijd / 0.6})`;
+      ctx.font = "bold 20px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("💥 CRASH!", 0, -10);
+      ctx.restore();
+    }
+
+    tekenRaket(ctx, laatst.x, valY, kantelHoek, false, 0.9);
+  }
+}
+
+function zetCrashLus(aan) {
+  if (aan && crashTimers.length === 0) {
+    crashTimers.push(setInterval(crashTekenen, 60));
+    crashTimers.push(setInterval(ververs, 250));
+  } else if (!aan && crashTimers.length) {
+    crashTimers.forEach(clearInterval);
+    crashTimers = [];
+  }
+}
+
+/* ROULETTE */
+const RT_VOLGORDE = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const RT_ROOD = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const RT_STAP = 360 / 37;
+const RT_R = { baanBal: 164, zak: 110, zakBuiten: 138, zakBinnen: 96 };
+const RT_ROTOR_SNELHEID = 22;
+const RT_BAL_SNELHEID = 420;
+const RT_T0 = performance.now();
+
+function rtPt(r, hoek) {
+  const a = hoek * Math.PI / 180;
+  return [200 + r * Math.sin(a), 200 - r * Math.cos(a)];
+}
+function rtSector(r1, r2, a1, a2) {
+  const [x1, y1] = rtPt(r2, a1), [x2, y2] = rtPt(r2, a2);
+  const [x3, y3] = rtPt(r1, a2), [x4, y4] = rtPt(r1, a1);
+  return `M${x1} ${y1} A${r2} ${r2} 0 0 1 ${x2} ${y2} L${x3} ${y3} A${r1} ${r1} 0 0 0 ${x4} ${y4} Z`;
+}
+function rtPocketHoek(n) { return RT_VOLGORDE.indexOf(n) * RT_STAP; }
+function rtKleur(n) { return n === 0 ? "groen" : (RT_ROOD.has(n) ? "rood" : "zwart"); }
+
+function rtBouw() {
+  const svg = document.getElementById("rt_svg");
+  if (!svg) return;
+  const fill = { rood: "#b3141c", zwart: "#141414", groen: "#17803d" };
+  let pockets = "", frets = "", nummers = "";
+  RT_VOLGORDE.forEach((n, i) => {
+    const a = i * RT_STAP;
+    pockets += `<path d="${rtSector(RT_R.zakBinnen, RT_R.zakBuiten, a - RT_STAP / 2, a + RT_STAP / 2)}" fill="${fill[rtKleur(n)]}"/>`;
+    const [fx1, fy1] = rtPt(RT_R.zakBinnen, a - RT_STAP / 2), [fx2, fy2] = rtPt(RT_R.zakBuiten, a - RT_STAP / 2);
+    frets += `<line x1="${fx1}" y1="${fy1}" x2="${fx2}" y2="${fy2}"/>`;
+    const [tx, ty] = rtPt(127, a);
+    nummers += `<text x="${tx}" y="${ty}" transform="rotate(${a} ${tx} ${ty})">${n}</text>`;
+  });
+  let facetten = "", diamantjes = "", deflectors = "";
+  for (let i = 0; i < 8; i++) {
+    const a = i * 45;
+    const [x1, y1] = rtPt(34, a), [x2, y2] = rtPt(94, a);
+    facetten += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    const [dx, dy] = rtPt(76, a + 22.5);
+    diamantjes += `<rect x="${dx - 4}" y="${dy - 4}" width="8" height="8" transform="rotate(${a + 22.5 + 45} ${dx} ${dy})"/>`;
+    const [ex, ey] = rtPt(178, a + 22.5);
+    deflectors += `<rect x="${ex - 3.5}" y="${ey - 3.5}" width="7" height="7" transform="rotate(${a + 22.5 + 45} ${ex} ${ey})"/>`;
+  }
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="rtHout" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#9a6a37"/><stop offset="0.5" stop-color="#5a3418"/><stop offset="1" stop-color="#26130a"/>
+      </linearGradient>
+      <linearGradient id="rtGoud" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#f7e6a1"/><stop offset="0.5" stop-color="#b8862b"/><stop offset="1" stop-color="#f1d98a"/>
+      </linearGradient>
+      <radialGradient id="rtBaan" cx="200" cy="200" r="190" gradientUnits="userSpaceOnUse">
+        <stop offset="0.76" stop-color="#2d2d2d"/><stop offset="0.9" stop-color="#141414"/><stop offset="1" stop-color="#3a2614"/>
+      </radialGradient>
+      <radialGradient id="rtZakSchaduw" cx="200" cy="200" r="138" gradientUnits="userSpaceOnUse">
+        <stop offset="0.69" stop-color="#000" stop-opacity="0.6"/><stop offset="0.88" stop-color="#000" stop-opacity="0"/>
+        <stop offset="1" stop-color="#fff" stop-opacity="0.14"/>
+      </radialGradient>
+      <radialGradient id="rtKegel" cx="185" cy="185" r="100" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#8a5a2e"/><stop offset="0.6" stop-color="#4a2c15"/><stop offset="1" stop-color="#24140a"/>
+      </radialGradient>
+      <radialGradient id="rtTurret" cx="0.35" cy="0.3" r="0.8">
+        <stop offset="0" stop-color="#fff6c8"/><stop offset="0.5" stop-color="#d4a62f"/><stop offset="1" stop-color="#7a5812"/>
+      </radialGradient>
+      <radialGradient id="rtBal" cx="0.35" cy="0.3" r="0.8">
+        <stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#d8d8d8"/><stop offset="1" stop-color="#7d7d7d"/>
+      </radialGradient>
+    </defs>
+    <circle cx="200" cy="200" r="198" fill="url(#rtHout)" stroke="#120904" stroke-width="2"/>
+    <circle cx="200" cy="200" r="191" fill="url(#rtBaan)" stroke="url(#rtGoud)" stroke-width="3"/>
+    <g fill="url(#rtGoud)" stroke="#5c4310" stroke-width="0.6">${deflectors}</g>
+    <circle cx="200" cy="200" r="146" fill="none" stroke="url(#rtGoud)" stroke-width="11"/>
+    <circle cx="200" cy="200" r="151" fill="none" stroke="#000" stroke-opacity="0.45" stroke-width="2"/>
+    <g id="rt_rotor">
+      <circle cx="200" cy="200" r="140" fill="#101010"/>
+      ${pockets}
+      <circle cx="200" cy="200" r="138" fill="url(#rtZakSchaduw)"/>
+      <g stroke="#e9dcab" stroke-width="1.1" stroke-linecap="round">${frets}</g>
+      <circle cx="200" cy="200" r="138" fill="none" stroke="url(#rtGoud)" stroke-width="2.5"/>
+      <circle cx="200" cy="200" r="96" fill="none" stroke="url(#rtGoud)" stroke-width="3"/>
+      <g fill="#f4ead0" font-family="Georgia, 'Times New Roman', serif" font-weight="bold" font-size="11" text-anchor="middle" dominant-baseline="central">${nummers}</g>
+      <circle cx="200" cy="200" r="94" fill="url(#rtKegel)"/>
+      <circle cx="200" cy="200" r="60" fill="none" stroke="#d4af37" stroke-opacity="0.45" stroke-width="1"/>
+      <g stroke="#d4af37" stroke-opacity="0.55" stroke-width="1.2">${facetten}</g>
+      <g fill="url(#rtGoud)" stroke="#5c4310" stroke-width="0.6">${diamantjes}</g>
+      <g stroke="url(#rtGoud)" stroke-width="4.5" stroke-linecap="round">
+        <line x1="200" y1="200" x2="200" y2="150"/><line x1="200" y1="200" x2="200" y2="250"/>
+        <line x1="200" y1="200" x2="150" y2="200"/><line x1="200" y1="200" x2="250" y2="200"/>
+      </g>
+      <g fill="url(#rtTurret)" stroke="#6b4e12" stroke-width="0.8">
+        <circle cx="200" cy="148" r="5"/><circle cx="200" cy="252" r="5"/><circle cx="148" cy="200" r="5"/><circle cx="252" cy="200" r="5"/>
+        <circle cx="200" cy="200" r="24"/>
+      </g>
+      <circle cx="200" cy="200" r="9" fill="url(#rtTurret)" stroke="#6b4e12" stroke-width="0.8"/>
+      <path id="rt_winnaar_marker" d="" fill="none" stroke="#f1c40f" stroke-width="2.5" stroke-linejoin="round" style="display:none; filter: drop-shadow(0 0 4px #f1c40f);"/>
+    </g>
+    <g id="rt_bal">
+      <circle cx="1.6" cy="2.2" r="5.5" fill="#000" fill-opacity="0.45"/>
+      <circle r="5.5" fill="url(#rtBal)"/>
+    </g>`;
+}
+rtBouw();
+
+const rtA = { mode: "idle", doel: null, start: 0, duur: 0, phi0: 0, delta: 0, orbitStart: 0, spinStart: 0, klaar: false };
+
+function rtRotorHoek(nu) { return (nu - RT_T0) / 1000 * RT_ROTOR_SNELHEID; }
+function rtBalWereld(nu) {
+  if (rtA.mode === "orbit") return rtA.orbitStart - (nu - rtA.start) / 1000 * RT_BAL_SNELHEID;
+  return 0;
+}
+function rtReset() {
+  rtA.mode = "idle"; rtA.doel = null; rtA.klaar = false;
+  const m = document.getElementById("rt_winnaar_marker");
+  if (m) m.style.display = "none";
+}
+function rtStartOrbit(nu) {
+  rtA.mode = "orbit"; rtA.start = nu; rtA.orbitStart = 0;
+}
+function rtStartSettle(nu, duur, doel) {
+  const w = rtBalWereld(nu);
+  const th = rtRotorHoek(nu);
+  const phi0 = w - th;
+  const pocket = rtPocketHoek(doel);
+  const draaien = Math.max(1, Math.round((RT_BAL_SNELHEID + RT_ROTOR_SNELHEID) * (duur / 1000) / 3 / 360));
+  const rest = (((phi0 - pocket) % 360) + 360) % 360;
+  rtA.phi0 = phi0; rtA.delta = -(360 * draaien + rest);
+  rtA.start = nu; rtA.duur = duur; rtA.doel = doel; rtA.mode = "settle";
+}
+function rtKlaarZetten() {
+  rtA.mode = "klaar"; rtA.klaar = true;
+  const a = rtPocketHoek(rtA.doel);
+  const m = document.getElementById("rt_winnaar_marker");
+  if (m) {
+    m.setAttribute("d", rtSector(RT_R.zakBinnen, RT_R.zakBuiten, a - RT_STAP / 2, a + RT_STAP / 2));
+    m.style.display = "";
+  }
+  ververs();
+}
+function rtFrame(nu) {
+  requestAnimationFrame(rtFrame);
+  const zone = document.getElementById("roulette_zone");
+  const rotor = document.getElementById("rt_rotor");
+  const bal = document.getElementById("rt_bal");
+  if (!zone || zone.style.display === "none" || !rotor || !bal) return;
+
+  const th = rtRotorHoek(nu);
+  rotor.setAttribute("transform", `rotate(${th} 200 200)`);
+
+  let hoek = 0, r = RT_R.baanBal;
+  if (rtA.mode === "orbit") {
+    hoek = rtBalWereld(nu);
+  } else if (rtA.mode === "settle") {
+    const p = Math.min(1, (nu - rtA.start) / rtA.duur);
+    const e = 1 - Math.pow(1 - p, 3);
+    let phi = rtA.phi0 + rtA.delta * e;
+    const val = 0.55;
+    if (p > val) {
+      const s = (p - val) / (1 - val);
+      r = RT_R.baanBal + (RT_R.zak - RT_R.baanBal) * s * s;
+      r += 7 * Math.abs(Math.sin(s * Math.PI * 3.5)) * Math.pow(1 - s, 2);
+      phi += 14 * Math.sin(s * Math.PI * 6) * Math.pow(1 - s, 2.5);
+    }
+    hoek = th + phi;
+    if (p >= 1) rtKlaarZetten();
+  } else if (rtA.mode === "klaar") {
+    hoek = th + rtPocketHoek(rtA.doel);
+    r = RT_R.zak;
+  }
+  const [x, y] = rtPt(r, hoek);
+  bal.setAttribute("transform", `translate(${x} ${y})`);
+}
+requestAnimationFrame(rtFrame);
+
+function rouletteUpdate(rt) {
+  const nu = performance.now();
+  const doel = (rt.winnend_nummer === null || rt.winnend_nummer === undefined) ? null : Number(rt.winnend_nummer);
+  if (rt.fase === "inzetten") {
+    rtReset();
+  } else if (rt.fase === "draaien") {
+    if (rtA.mode === "idle") {
+      rtA.spinStart = nu;
+      if (doel !== null) rtStartSettle(nu, 5500, doel); else rtStartOrbit(nu);
+    } else if (rtA.mode === "orbit" && doel !== null) {
+      rtStartSettle(nu, Math.max(2500, rtA.spinStart + 5500 - nu), doel);
+    }
+  } else if (rt.fase === "afgelopen" && doel !== null) {
+    if (rtA.mode === "idle") { rtA.doel = doel; rtKlaarZetten(); }
+    else if (rtA.mode === "orbit") rtStartSettle(nu, 3000, doel);
+  }
+}
+
+function rbKaartHtml(k) {
+  const rood = k.includes("\u2665") || k.includes("\u2666");
+  return `<div class="kaart ${rood ? 'rood' : ''}">${k}</div>`;
+}
+
+async function ververs() {
+  try {
+    const res = await fetch("/status");
+    const data = await res.json();
+
+    if (data.fase !== "crash" || !data.crash || data.crash.fase !== "lopend") zetCrashLus(false);
+    const s1 = data.spelers[1];
+    const s2 = data.spelers[2];
+
+    document.getElementById("status1").textContent = s1.verbonden ? `verbonden (${s1.ingelogd_als || 'gast'})` : "nog niet verbonden";
+    document.getElementById("status1").className = s1.verbonden ? "verbonden" : "niet-verbonden";
+    document.getElementById("status2").textContent = s2.verbonden ? `verbonden (${s2.ingelogd_als || 'gast'})` : "nog niet verbonden";
+    document.getElementById("status2").className = s2.verbonden ? "verbonden" : "niet-verbonden";
+
+    const beideVerbonden = s1.verbonden && s2.verbonden;
+    if (beideVerbonden && data.fase === "wachten") {
+      document.getElementById("qr_zone").style.display = "none";
+      document.getElementById("hoofd_subtitel").textContent = "Beide spelers zijn verbonden! Host (Speler 1) kiest het spel.";
+    } else if (!beideVerbonden && data.fase === "wachten") {
+      document.getElementById("qr_zone").style.display = "flex";
+      document.getElementById("hoofd_subtitel").textContent = "Scan je QR-code met je GSM om te verbinden";
+    }
+
+    if (data.fase === "wachten") {
+      verbergAlles();
+      if (beideVerbonden) document.getElementById("qr_zone").style.display = "none";
+      else document.getElementById("qr_zone").style.display = "flex";
+
+      document.getElementById("wintekst").textContent = "";
+      document.getElementById("startbericht").textContent = beideVerbonden
+        ? (data.spel_keuze ? `Gekozen spel: ${data.spellen[data.spel_keuze].naam}. Wachten tot Host start!` : "Host (Speler 1) kan een spel kiezen...")
+        : "Wachten op beide spelers...";
+      return;
+    }
+
+    document.getElementById("startbericht").textContent = "";
+
+    // POKER
+    if (["preflop", "flop", "turn", "river", "showdown"].includes(data.fase)) {
+      verbergAlles();
+      document.getElementById("poker_zone").style.display = "block";
+
+      const communityEl = document.getElementById("community");
+      communityEl.innerHTML = "";
+      (data.community || []).forEach(k => communityEl.innerHTML += `<div class="kaart">${k}</div>`);
+
+      document.getElementById("pot").textContent = data.pot;
+
+      const spelersEl = document.getElementById("poker_spelers");
+      spelersEl.innerHTML = "";
+      for (const pid of [1, 2]) {
+        const sp = data.spelers[pid];
+        const aanDeBeurt = data.beurt === parseInt(pid) ? "aan_de_beurt" : "";
+        spelersEl.innerHTML += `
+          <div class="speler-kaart ${aanDeBeurt}">
+            <h3>${sp.ingelogd_als || sp.naam}</h3>
+            <p>Inzet: <b>${sp.street_bet}</b></p>
+            <p>Chips: <b>${sp.chips}</b></p>
+            ${sp.gefold ? '<p class="gefold-label">GEFOLD</p>' : ''}
+          </div>`;
+      }
+
+      if (data.fase === "showdown") {
+        document.getElementById("wintekst").textContent = data.wintekst;
+        document.getElementById("poker_timer").textContent = "";
+      } else {
+        document.getElementById("wintekst").textContent = "";
+        document.getElementById("poker_timer").textContent = `Speler ${data.beurt} is aan de beurt`;
+      }
+      return;
+    }
+
+    // BLACKJACK
+    if (data.fase === "blackjack" && data.blackjack) {
+      verbergAlles();
+      document.getElementById("blackjack_zone").style.display = "block";
+      const bj = data.blackjack;
+
+      const dealerEl = document.getElementById("bj_dealer_hand");
+      dealerEl.innerHTML = "";
+      (bj.dealer_hand || []).forEach(k => {
+        dealerEl.innerHTML += k === "verborgen" ? `<div class="kaart">?</div>` : `<div class="kaart">${k}</div>`;
+      });
+
+      const spelersEl = document.getElementById("bj_spelers");
+      spelersEl.innerHTML = "";
+      for (const pid of [1, 2]) {
+        const sp = bj.spelers[pid];
+        if (!sp) continue;
+        spelersEl.innerHTML += `
+          <div class="speler-kaart ${bj.beurt === parseInt(pid) ? 'aan_de_beurt' : ''}">
+            <h3>${sp.ingelogd_als || sp.naam}</h3>
+            <p>Inzet: <b>${sp.inzet}</b></p>
+            <p>Chips: <b>${sp.chips}</b></p>
+            <p>Status: <b>${sp.status}</b></p>
+            ${sp.resultaat ? `<p style="color:#f1c40f;"><b>${sp.resultaat}</b></p>` : ''}
+          </div>`;
+      }
+      return;
+    }
+
+    // ANIMAL RACING
+    if (data.fase === "animalrace" && data.animalrace) {
+      verbergAlles();
+      document.getElementById("animalrace_zone").style.display = "block";
+      const ar = data.animalrace;
+
+      const banenEl = document.getElementById("ar_banen");
+      if (banenEl.children.length !== ar.dieren.length) {
+        banenEl.innerHTML = "";
+        ar.dieren.forEach((dier, i) => {
+          banenEl.innerHTML += `
+            <div class="baan-rij" id="baan_rij_${i}">
+              <div class="baan-naam">
+                ${dier.emoji} <b>${dier.naam}</b>
+                <span>"${dier.zin}"</span>
+              </div>
+              <div class="baan"><div class="baan-dier" id="baan_dier_${i}">${dier.emoji}</div></div>
+            </div>`;
+        });
+      }
+      ar.dieren.forEach((dier, i) => {
+        const pct = Math.min(100, (ar.posities[i] / ar.baan_lengte) * 100);
+        const dierEl = document.getElementById(`baan_dier_${i}`);
+        if (dierEl) dierEl.style.left = `calc(${pct}% - ${pct * 0.01 * 35}px)`;
+        
+        const rijEl = document.getElementById(`baan_rij_${i}`);
+        if (rijEl) {
+          rijEl.classList.remove("winnaar", "verliezer");
+          if (ar.fase === "afgelopen") {
+            if (ar.winnaar_dier === i) rijEl.classList.add("winnaar");
+            else rijEl.classList.add("verliezer");
+          }
+        }
+      });
+
+      const arSpelersEl = document.getElementById("ar_spelers");
+      arSpelersEl.innerHTML = "";
+      for (const pid of [1, 2]) {
+        const sp = ar.spelers[pid];
+        if (!sp) continue;
+        let dierTekst = "-";
+        if (sp.dier !== undefined && sp.dier !== null) dierTekst = `${ar.dieren[sp.dier].emoji} ${ar.dieren[sp.dier].naam}`;
+        else if (ar.fase === "inzetten" && sp.heeft_ingezet) dierTekst = "(gekozen)";
+        arSpelersEl.innerHTML += `
+          <div class="speler-kaart">
+            <h3>${sp.ingelogd_als || sp.naam}</h3>
+            <p>Dier: <b>${dierTekst}</b></p>
+            <p>Inzet: <b>${sp.inzet}</b></p>
+            <p>Chips: <b>${sp.chips}</b></p>
+            ${sp.resultaat ? `<p style="color:#f1c40f;"><b>${sp.resultaat}</b></p>` : ''}
+          </div>`;
+      }
+      return;
+    }
+
+    // LIAR'S BAR
+    if (data.fase === "liarsbar" && data.liarsbar) {
+      verbergAlles();
+      document.getElementById("liarsbar_zone").style.display = "block";
+      const lb = data.liarsbar;
+
+      document.getElementById("lb_doel_kaart").textContent = lb.doel_kaart;
+      document.getElementById("lb_tafel_aantal").textContent = lb.aantal_op_tafel;
+      document.getElementById("lb_melding").textContent = lb.melding;
+
+      const spelersEl = document.getElementById("lb_spelers");
+      spelersEl.innerHTML = "";
+      for (const pid of [1, 2]) {
+        const sp = lb.spelers[pid];
+        const aanDeBeurt = lb.beurt === parseInt(pid) ? "aan_de_beurt" : "";
+        spelersEl.innerHTML += `
+          <div class="speler-kaart ${aanDeBeurt}">
+            <h3>${sp.ingelogd_als || sp.naam}</h3>
+            <p>Hand: <b>${sp.aantal_kaarten} kaarten</b></p>
+            <p>Status: <b>${sp.is_levend ? '❤️ In het spel' : '💀 Afgevallen'}</b></p>
+          </div>`;
+      }
+
+      const revealEl = document.getElementById("lb_reveal_zone");
+      if (lb.fase === "coinflip" && lb.reveal_info) {
+        revealEl.style.display = "block";
+        revealEl.innerHTML = `
+          <p>🔥 <b>Speler ${lb.reveal_info.caller}</b> callde de bluff van <b>Speler ${lb.reveal_info.beschuldigde}</b>!</p>
+          <p>Onthulde kaarten: <b>${lb.reveal_info.kaarten.join(", ")}</b></p>
+          <p><b>${lb.reveal_info.was_bluff ? "BLUFF GEBOEKSTAAVD!" : "GEEN BLUFF! Eerlijke speler!"}</b></p>
+          <p>🎲 Speler ${lb.reveal_info.verliezer} moet Heads or Tails kiezen op z'n telefoon!</p>`;
+      } else if (lb.fase === "afgelopen") {
+        revealEl.style.display = "block";
+        revealEl.innerHTML = `<h2>🏆 Speler ${lb.winnaar} wint Liar's Bar! 🏆</h2>`;
+      } else {
+        revealEl.style.display = "none";
+      }
+      return;
+    }
+
+    // ROULETTE
+    if (data.fase === "roulette" && data.roulette) {
+      verbergAlles();
+      document.getElementById("roulette_zone").style.display = "block";
+      const rt = data.roulette;
+      rouletteUpdate(rt);
+      const uitslagEl = document.getElementById("rt_uitslag");
+
+      if (rt.fase === "inzetten") {
+        document.getElementById("rt_fase_tekst").textContent = "Spelers zijn aan het inzetten...";
+        uitslagEl.innerHTML = "";
+      } else if (rt.fase === "draaien") {
+        document.getElementById("rt_fase_tekst").textContent = "Het rad draait! Spanning stijgt...";
+        uitslagEl.innerHTML = "";
+      } else if (rt.fase === "afgelopen") {
+        if (rtA.klaar) {
+          const n = Number(rt.winnend_nummer);
+          document.getElementById("rt_fase_tekst").textContent = "Ronde Afgelopen!";
+          uitslagEl.innerHTML = `Winnend Nummer: <span class="rt-badge ${rtKleur(n)}">${n}</span>`;
+        } else {
+          document.getElementById("rt_fase_tekst").textContent = "De bal rolt uit...";
+          uitslagEl.innerHTML = "";
+        }
+      }
+
+      const spelersEl = document.getElementById("rt_spelers");
+      spelersEl.innerHTML = "";
+      const toonResultaat = rt.fase !== "afgelopen" || rtA.klaar;
+      for (const pid of [1, 2]) {
+        const sp = rt.spelers[pid];
+        spelersEl.innerHTML += `
+          <div class="speler-kaart">
+            <h3>${sp.ingelogd_als || 'Speler ' + pid}</h3>
+            <p>Inzetten: <b>${sp.inzetten.length} geplaatst</b></p>
+            ${(sp.resultaat && toonResultaat) ? `<p style="color:#f1c40f;"><b>${sp.resultaat}</b></p>` : ''}
+          </div>`;
+      }
+      return;
+    }
+
+    // RIDE THE BUS
+    if (data.fase === "ridebus" && data.ridebus) {
+      verbergAlles();
+      document.getElementById("ridebus_zone").style.display = "block";
+      const rb = data.ridebus;
+
+      document.getElementById("rb_fase_tekst").textContent =
+        rb.fase === "inzetten" ? "Spelers zijn aan het inzetten..." :
+        rb.fase === "spelen" ? "Wie rijdt de bus uit? Kies op je GSM!" : "Ronde afgelopen!";
+
+      const spelersEl = document.getElementById("rb_spelers");
+      spelersEl.innerHTML = "";
+      for (const pid of [1, 2]) {
+        const sp = rb.spelers[pid];
+        const vraagTekst = sp.vraag ? sp.vraag.titel : "";
+        const ladder = rb.multipliers.map((m, i) =>
+          `<span class="${sp.status === 'spelen' && sp.stap === i ? 'actief' : ''}">${m}x</span>`).join(" → ");
+        spelersEl.innerHTML += `
+          <div class="speler-kaart ${sp.status === 'spelen' ? 'aan_de_beurt' : ''}" style="min-width:300px;">
+            <h3>${sp.ingelogd_als || sp.naam}</h3>
+            <div class="kaarten-rij" style="min-height:85px;">${sp.kaarten.map(rbKaartHtml).join("")}</div>
+            ${vraagTekst ? `<p style="color:#f1c40f;">Vraag ${sp.stap + 1}/4: ${vraagTekst}</p>` : ''}
+            <p>Inzet: <b>${sp.inzet}</b> | Chips: <b>${sp.chips}</b></p>
+            <p style="font-size:0.9em; color:#aaa;">${ladder}</p>
+            ${sp.resultaat ? `<p style="color:${sp.status === 'verloren' ? '#e74c3c' : '#2ecc71'};"><b>${sp.resultaat}</b></p>` : ''}
+          </div>`;
+      }
+      document.getElementById("rb_ladder").innerHTML =
+        "Uitbetaling: " + rb.vragen.map((v, i) => `${v} <b>${rb.multipliers[i]}x</b>`).join(" • ");
+      return;
+    }
+
+    // CRASH
+    if (data.fase === "crash" && data.crash) {
+      verbergAlles();
+      document.getElementById("crash_zone").style.display = "block";
+      const cr = data.crash;
+
+      crashSync = {
+        fase: cr.fase, groei: cr.groei, start: cr.start,
+        verstreken: cr.verstreken === null ? -1 : cr.verstreken, ontvangen: performance.now(),
+        crash_punt: cr.crash_punt, crash_verstreken: cr.crash_verstreken,
+      };
+
+      let fasetekst = "";
+      if (cr.fase === "inzetten") fasetekst = "Spelers zijn aan het inzetten...";
+      else if (cr.fase === "lopend") fasetekst = cr.verstreken < 0 ? `Start over ${Math.ceil(-cr.verstreken)}...` : "Cash out voor het crasht!";
+      else fasetekst = "💥 CRASH! 💥";
+      document.getElementById("cr_fase_tekst").textContent = fasetekst;
+
+      if (cr.fase === "lopend") zetCrashLus(true);
+      crashTekenen();
+
+      const spelersEl = document.getElementById("cr_spelers");
+      spelersEl.innerHTML = "";
+      for (const pid of [1, 2]) {
+        const sp = cr.spelers[pid];
+        let statusTekst = "";
+        if (sp.status === "uitbetaald") statusTekst = `<p style="color:#2ecc71;"><b>Cash out bij ${sp.uitbetaald_bij.toFixed(2)}x (${sp.winst} chips)</b></p>`;
+        else if (sp.status === "verloren") statusTekst = `<p style="color:#e74c3c;"><b>Gecrasht, ${sp.inzet} chips verloren</b></p>`;
+        else if (sp.status === "spelen") statusTekst = `<p style="color:#f1c40f;"><b>Nog in het spel...</b></p>`;
+        else if (sp.status === "ingezet") statusTekst = `<p style="color:#aaa;">Klaar</p>`;
+        spelersEl.innerHTML += `
+          <div class="speler-kaart ${sp.status === 'spelen' ? 'aan_de_beurt' : ''}">
+            <h3>${sp.ingelogd_als || sp.naam}</h3>
+            <p>Inzet: <b>${sp.inzet}</b></p>
+            <p>Chips: <b>${sp.chips}</b></p>
+            ${statusTekst}
+          </div>`;
+      }
+      return;
+    }
+
+  } catch (e) {
+    console.error("Kon status niet ophalen:", e);
+  }
+}
+
+setInterval(ververs, 1000);
+ververs();
+</script>
+</body>
+</html>
