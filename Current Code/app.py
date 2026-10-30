@@ -8,7 +8,7 @@ from flask import Flask, jsonify, render_template, request, session
 
 import poker_engine as pe
 import blackjack_engine as bj
-import paardenrace_engine as pr
+import animalrace_engine as pr
 import liarsbar_engine as lb
 import roulette_engine as rt
 import ridebus_engine as rb
@@ -23,7 +23,7 @@ db.maak_tabellen()
 
 state = pe.nieuw_spel()
 blackjack_state = bj.nieuw_spel()
-paardenrace_state = pr.nieuw_spel()
+animalrace_state = pr.nieuw_spel()
 liarsbar_state = lb.nieuw_spel()
 roulette_state = rt.nieuw_spel()
 ridebus_state = rb.nieuw_spel()
@@ -32,13 +32,14 @@ crash_state = cr.nieuw_spel()
 BESCHIKBARE_SPELLEN = {
     "poker": {"naam": "Poker (Texas Hold'em)", "beschikbaar": True},
     "blackjack": {"naam": "Blackjack", "beschikbaar": True},
-    "paardenrace": {"naam": "Paardenrennen", "beschikbaar": True},
+    "animalrace": {"naam": "Animal Racing 🐾", "beschikbaar": True},
     "liarsbar": {"naam": "Liar's Bar", "beschikbaar": True},
     "roulette": {"naam": "Roulette", "beschikbaar": True},
     "ridebus": {"naam": "Ride the Bus", "beschikbaar": True},
     "crash": {"naam": "Crash", "beschikbaar": True},
 }
 state["spel_keuze"] = None
+state["suggestie_spel"] = None
 LAATST_GEZIEN = {1: time.time(), 2: time.time()}
 
 for _pid in (1, 2):
@@ -89,11 +90,12 @@ def controleer_verbindingen():
 
 
 def reset_naar_wachten():
-    global state, blackjack_state, paardenrace_state, liarsbar_state, roulette_state, ridebus_state, crash_state
+    global blackjack_state, animalrace_state, liarsbar_state, roulette_state, ridebus_state, crash_state
     state["fase"] = "wachten"
     state["spel_keuze"] = None
+    state["suggestie_spel"] = None
     blackjack_state = bj.nieuw_spel()
-    paardenrace_state = pr.nieuw_spel()
+    animalrace_state = pr.nieuw_spel()
     liarsbar_state = lb.nieuw_spel()
     roulette_state = rt.nieuw_spel()
     ridebus_state = rb.nieuw_spel()
@@ -107,14 +109,11 @@ def sla_chips_op_indien_ingelogd(pid):
 
 
 def geef_donaties():
-    """Wie blut is, krijgt HUIS_DONATIE chips van het casino. Alleen aanroepen op veilige
-    momenten (spel gekozen/gestart, tussen rondes), nooit midden in een ronde.
-    De chips gaan naar de hoofdstatus, alle spel-statussen en de database."""
     for pid in (1, 2):
         if state["spelers"][pid]["chips"] <= 0:
             state["spelers"][pid]["chips"] = pe.HUIS_DONATIE
             state["spelers"][pid]["donatie"] = True
-            for spel_state in (blackjack_state, paardenrace_state, roulette_state, ridebus_state, crash_state):
+            for spel_state in (blackjack_state, animalrace_state, roulette_state, ridebus_state, crash_state):
                 spel_state["spelers"][pid]["chips"] = pe.HUIS_DONATIE
             sla_chips_op_indien_ingelogd(pid)
 
@@ -123,14 +122,14 @@ def sync_chips_naar_hoofdstatus():
     for pid in (1, 2):
         if state["spel_keuze"] == "blackjack":
             state["spelers"][pid]["chips"] = blackjack_state["spelers"][pid]["chips"]
-        elif state["spel_keuze"] == "paardenrace":
-            state["spelers"][pid]["chips"] = paardenrace_state["spelers"][pid]["chips"]
+        elif state["spel_keuze"] == "animalrace":
+            state["spelers"][pid]["chips"] = animalrace_state["spelers"][pid]["chips"]
         elif state["spel_keuze"] == "roulette":
             state["spelers"][pid]["chips"] = roulette_state["spelers"][pid]["chips"]
 
 
-def werk_paardenrace_bij():
-    if pr.check_race(paardenrace_state):
+def werk_animalrace_bij():
+    if pr.check_race(animalrace_state):
         sync_chips_naar_hoofdstatus()
         for kpid in (1, 2):
             sla_chips_op_indien_ingelogd(kpid)
@@ -152,17 +151,24 @@ def speler_scherm(pid):
 
     sessie_sleutel = f"gebruikersnaam_{pid}"
     if not session.get(sessie_sleutel):
-        return render_template("login.html", speler_id=pid)
+        return render_template("login.html", speler_id=pid, pid=pid, token=token)
 
     state["spelers"][pid]["verbonden"] = True
     LAATST_GEZIEN[pid] = time.time()
     return render_template("speler.html", speler_id=pid)
 
 
+def token_geldig(pid):
+    token = request.args.get("token", "")
+    return bool(token) and token == state["spelers"][pid]["token"]
+
+
 @app.route("/login/<int:pid>", methods=["POST"])
 def login_verwerken(pid):
     if pid not in (1, 2):
         return jsonify({"ok": False, "fout": "Onbekende speler."}), 404
+    if not token_geldig(pid):
+        return jsonify({"ok": False, "fout": "Ongeldige of verlopen link. Scan de QR-code opnieuw."}), 403
     data = request.get_json(force=True) or {}
     ok, fout, spelerrij = db.inloggen(data.get("gebruikersnaam", ""), data.get("code", ""))
     if not ok:
@@ -184,6 +190,8 @@ def login_verwerken(pid):
 def registreer_verwerken(pid):
     if pid not in (1, 2):
         return jsonify({"ok": False, "fout": "Onbekende speler."}), 404
+    if not token_geldig(pid):
+        return jsonify({"ok": False, "fout": "Ongeldige of verlopen link. Scan de QR-code opnieuw."}), 403
     data = request.get_json(force=True) or {}
     ok, fout = db.account_aanmaken(data.get("gebruikersnaam", ""), data.get("code", ""))
     if not ok:
@@ -217,7 +225,23 @@ def kies_spel():
     keuze = data.get("spel")
     if keuze not in BESCHIKBARE_SPELLEN:
         return jsonify({"ok": False, "fout": "Onbekend spel."}), 400
+    
+    speler_id = int(data.get("speler", 1))
+    if speler_id != 1:
+        return jsonify({"ok": False, "fout": "Alleen Host (Speler 1) kan het spel kiezen of wijzigen."}), 403
+
     state["spel_keuze"] = keuze
+    state["suggestie_spel"] = None
+    return jsonify({"ok": True})
+
+
+@app.route("/suggereer_spel", methods=["POST"])
+def suggereer_spel():
+    data = request.get_json(force=True) or {}
+    keuze = data.get("spel")
+    if keuze not in BESCHIKBARE_SPELLEN:
+        return jsonify({"ok": False, "fout": "Onbekend spel."}), 400
+    state["suggestie_spel"] = keuze
     return jsonify({"ok": True})
 
 
@@ -235,9 +259,9 @@ def start_spel():
     elif state["spel_keuze"] == "blackjack":
         state["fase"] = "blackjack"
         blackjack_state["fase"] = "inzetten"
-    elif state["spel_keuze"] == "paardenrace":
-        state["fase"] = "paardenrace"
-        paardenrace_state["fase"] = "inzetten"
+    elif state["spel_keuze"] == "animalrace":
+        state["fase"] = "animalrace"
+        animalrace_state["fase"] = "inzetten"
     elif state["spel_keuze"] == "liarsbar":
         state["fase"] = "liarsbar"
         lb.start_ronde(liarsbar_state)
@@ -272,9 +296,9 @@ def volgende_hand():
     elif state["spel_keuze"] == "blackjack":
         sync_chips_naar_hoofdstatus()
         bj.klaar_voor_nieuwe_ronde(blackjack_state)
-    elif state["spel_keuze"] == "paardenrace":
+    elif state["spel_keuze"] == "animalrace":
         sync_chips_naar_hoofdstatus()
-        pr.klaar_voor_nieuwe_ronde(paardenrace_state)
+        pr.klaar_voor_nieuwe_ronde(animalrace_state)
     elif state["spel_keuze"] == "liarsbar":
         lb.klaar_voor_nieuwe_ronde(liarsbar_state)
     elif state["spel_keuze"] == "roulette":
@@ -284,14 +308,10 @@ def volgende_hand():
         rb.klaar_voor_nieuwe_ronde(ridebus_state)
     elif state["spel_keuze"] == "crash":
         cr.klaar_voor_nieuwe_ronde(crash_state)
-    if state["spel_keuze"] != "poker":  # poker regelt dit zelf vóór de blinds
+    if state["spel_keuze"] != "poker":
         geef_donaties()
     return jsonify({"ok": True})
 
-
-# ---------------------------------------------------------------------------
-# ACTIES
-# ---------------------------------------------------------------------------
 
 @app.route("/actie", methods=["POST"])
 def actie():
@@ -325,17 +345,17 @@ def blackjack_actie():
     return jsonify({"ok": ok, "fout": fout})
 
 
-@app.route("/paardenrace_inzet", methods=["POST"])
-def paardenrace_inzet():
+@app.route("/animalrace_inzet", methods=["POST"])
+def animalrace_inzet():
     data = request.get_json(force=True) or {}
     pid = int(data.get("speler"))
     bedrag = int(data.get("bedrag", 0))
-    paard = int(data.get("paard"))
-    paardenrace_state.setdefault("wachtende_inzetten", {})[pid] = (paard, bedrag)
-    if len(paardenrace_state["wachtende_inzetten"]) == 2:
-        keuzes = paardenrace_state["wachtende_inzetten"]
-        pr.start_ronde(paardenrace_state, keuzes)
-        paardenrace_state["wachtende_inzetten"] = {}
+    dier = int(data.get("dier"))
+    animalrace_state.setdefault("wachtende_inzetten", {})[pid] = (dier, bedrag)
+    if len(animalrace_state["wachtende_inzetten"]) == 2:
+        keuzes = animalrace_state["wachtende_inzetten"]
+        pr.start_ronde(animalrace_state, keuzes)
+        animalrace_state["wachtende_inzetten"] = {}
     return jsonify({"ok": True})
 
 
@@ -372,7 +392,12 @@ def roulette_inzet():
     t = data.get("type")
     w = data.get("waarde")
     b = int(data.get("bedrag", 0))
+    if state["spelers"][pid]["chips"] <= 0:
+        state["spelers"][pid]["chips"] = pe.HUIS_DONATIE
+    roulette_state["spelers"][pid]["chips"] = state["spelers"][pid]["chips"]
     ok, fout = rt.plaats_inzet(roulette_state, pid, t, w, b)
+    state["spelers"][pid]["chips"] = roulette_state["spelers"][pid]["chips"]
+    sla_chips_op_indien_ingelogd(pid)
     return jsonify({"ok": ok, "fout": fout})
 
 
@@ -380,8 +405,6 @@ def roulette_inzet():
 def roulette_bevestig():
     data = request.get_json(force=True) or {}
     pid = int(data.get("speler"))
-    roulette_state["spelers"][1]["chips"] = state["spelers"][1]["chips"]
-    roulette_state["spelers"][2]["chips"] = state["spelers"][2]["chips"]
     rt.bevestig_inzet_klaar(roulette_state, pid)
     return jsonify({"ok": True})
 
@@ -440,10 +463,6 @@ def ridebus_uitbetaal():
     return jsonify({"ok": ok, "fout": fout})
 
 
-# ---------------------------------------------------------------------------
-# STATUS HELPER FUNCTIES
-# ---------------------------------------------------------------------------
-
 def kaart_tekst(kaart):
     if isinstance(kaart, (list, tuple)):
         return str(kaart[0]) + str(kaart[1])
@@ -471,32 +490,32 @@ def blackjack_status(voor_pid=None):
     }
 
 
-def paardenrace_status(voor_pid=None):
-    werk_paardenrace_bij()
-    wachtend = paardenrace_state.get("wachtende_inzetten", {})
+def animalrace_status(voor_pid=None):
+    werk_animalrace_bij()
+    wachtend = animalrace_state.get("wachtende_inzetten", {})
     spelers_info = {}
-    for pid, s in paardenrace_state["spelers"].items():
+    for pid, s in animalrace_state["spelers"].items():
         info = {
             "naam": s["naam"], "chips": s["chips"], "inzet": s["inzet"],
             "status": s["status"], "resultaat": s.get("resultaat", ""),
             "ingelogd_als": state["spelers"][pid]["gebruikersnaam"],
             "heeft_ingezet": pid in wachtend or s["status"] != "wacht",
         }
-        if paardenrace_state["fase"] != "inzetten":
-            info["paard"] = s["paard"]
+        if animalrace_state["fase"] != "inzetten":
+            info["dier"] = s["dier"]
         elif voor_pid == pid and pid in wachtend:
-            info["paard"] = wachtend[pid][0]
+            info["dier"] = wachtend[pid][0]
         spelers_info[pid] = info
 
     resultaat = {
-        "fase": paardenrace_state["fase"], "paarden": pr.PAARDEN,
+        "fase": animalrace_state["fase"], "dieren": pr.DIEREN,
         "baan_lengte": pr.BAAN_LENGTE, "tick_duur": pr.TICK_DUUR,
-        "posities": pr.huidige_posities(paardenrace_state),
-        "gestart": paardenrace_state["fase"] != "inzetten" and (paardenrace_state["start_tijd"] or 0) <= time.time(),
+        "posities": pr.huidige_posities(animalrace_state),
+        "gestart": animalrace_state["fase"] != "inzetten" and (animalrace_state["start_tijd"] or 0) <= time.time(),
         "spelers": spelers_info,
     }
-    if paardenrace_state["fase"] == "afgelopen":
-        resultaat["winnaar_paard"] = paardenrace_state["winnaar_paard"]
+    if animalrace_state["fase"] == "afgelopen":
+        resultaat["winnaar_dier"] = animalrace_state["winnaar_dier"]
     return resultaat
 
 
@@ -536,7 +555,6 @@ def crash_na(pid):
 
 
 def werk_crash_bij():
-    """Voert automatische cash-outs/crash uit en synct de chips van wie uitbetaald kreeg."""
     for pid in cr.werk_bij(crash_state):
         crash_na(pid)
 
@@ -551,7 +569,6 @@ def crash_status(voor_pid=None):
             "naam": s["naam"], "chips": state["spelers"][pid]["chips"], "inzet": s["inzet"],
             "status": s["status"], "resultaat": s["resultaat"],
             "uitbetaald_bij": s["uitbetaald_bij"], "winst": s["winst"],
-            # automatische cash-out alleen aan de eigenaar tonen
             "auto": s["auto"] if voor_pid == pid else None,
             "ingelogd_als": state["spelers"][pid]["gebruikersnaam"],
         }
@@ -570,12 +587,10 @@ def crash_status(voor_pid=None):
 
 
 def ridebus_voor(pid):
-    """Hoofdstatus is leidend voor chips: kopieer naar ridebus voor de actie."""
     ridebus_state["spelers"][pid]["chips"] = state["spelers"][pid]["chips"]
 
 
 def ridebus_na(pid):
-    """Na de actie: chips terug naar de hoofdstatus en opslaan in de database."""
     state["spelers"][pid]["chips"] = ridebus_state["spelers"][pid]["chips"]
     sla_chips_op_indien_ingelogd(pid)
 
@@ -612,10 +627,13 @@ def publieke_status(voor_pid=None):
     if state["spel_keuze"] == "poker":
         pe.check_timeout(state)
     elif state["spel_keuze"] == "roulette" and state["fase"] == "roulette":
-        rt.check_draai_klaar(roulette_state)
+        if rt.check_draai_klaar(roulette_state):
+            sync_chips_naar_hoofdstatus()
+            for kpid in (1, 2):
+                sla_chips_op_indien_ingelogd(kpid)
 
     huidige_call = 0
-    if voor_pid is not None and state["fase"] not in ("wachten", "showdown", "einde", "blackjack", "paardenrace", "liarsbar", "roulette", "ridebus", "crash"):
+    if voor_pid is not None and state["fase"] not in ("wachten", "showdown", "einde", "blackjack", "animalrace", "liarsbar", "roulette", "ridebus", "crash"):
         speler = state["spelers"][voor_pid]
         huidige_call = max(0, state["huidige_inzet"] - speler["street_bet"])
 
@@ -627,7 +645,7 @@ def publieke_status(voor_pid=None):
             "verbonden": s["verbonden"], "ingelogd_als": s["gebruikersnaam"],
         }
         if voor_pid == pid:
-            if s.get("donatie"):  # eenmalig melden dat het casino chips heeft gegeven
+            if s.get("donatie"):
                 info["donatie"] = True
                 s["donatie"] = False
             info["hand"] = pe.zichtbare_hand(s["hand"]) if s["hand"] else []
@@ -637,6 +655,7 @@ def publieke_status(voor_pid=None):
     resultaat = {
         "fase": state["fase"],
         "spel_keuze": state["spel_keuze"],
+        "suggestie_spel": state.get("suggestie_spel"),
         "spellen": BESCHIKBARE_SPELLEN,
         "community": pe.zichtbare_hand(state["community"]),
         "pot": state.get("pot", 0),
@@ -649,8 +668,8 @@ def publieke_status(voor_pid=None):
 
     if state["spel_keuze"] == "blackjack" and state["fase"] == "blackjack":
         resultaat["blackjack"] = blackjack_status(voor_pid=voor_pid)
-    elif state["spel_keuze"] == "paardenrace" and state["fase"] == "paardenrace":
-        resultaat["paardenrace"] = paardenrace_status(voor_pid=voor_pid)
+    elif state["spel_keuze"] == "animalrace" and state["fase"] == "animalrace":
+        resultaat["animalrace"] = animalrace_status(voor_pid=voor_pid)
     elif state["spel_keuze"] == "liarsbar" and state["fase"] == "liarsbar":
         resultaat["liarsbar"] = liarsbar_status(voor_pid=voor_pid)
     elif state["spel_keuze"] == "roulette" and state["fase"] == "roulette":
@@ -666,7 +685,6 @@ def publieke_status(voor_pid=None):
                 } for p, s in roulette_state["spelers"].items()
             }
         }
-
     elif state["spel_keuze"] == "ridebus" and state["fase"] == "ridebus":
         resultaat["ridebus"] = ridebus_status(voor_pid=voor_pid)
     elif state["spel_keuze"] == "crash" and state["fase"] == "crash":
