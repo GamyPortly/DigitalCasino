@@ -33,11 +33,22 @@ def herstel_blut_spelers(state):
 def plaats_inzet(state, pid, type_inzet, waarde, bedrag):
     if state["fase"] != "inzetten":
         return False, "Het rad draait al of de ronde is afgelopen."
-
+        
     speler = state["spelers"][pid]
     bedrag = int(bedrag)
     if bedrag <= 0 or bedrag > speler["chips"]:
         return False, "Ongeldig inzetbedrag."
+
+    if type_inzet == "kleur" and waarde not in ("rood", "zwart"):
+        return False, "Ongeldige kleur."
+    if type_inzet == "pariteit" and waarde not in ("even", "oneven"):
+        return False, "Ongeldige keuze."
+
+    # Je mag maar op één kant inzetten: rood OF zwart, even OF oneven.
+    if type_inzet in ("kleur", "pariteit"):
+        for eerder in speler["inzetten"]:
+            if eerder["type"] == type_inzet and eerder["waarde"] != waarde:
+                return False, f"Je hebt al op {eerder['waarde']} ingezet, je kunt niet ook op {waarde} inzetten."
 
     speler["inzetten"].append({"type": type_inzet, "waarde": waarde, "bedrag": bedrag})
     speler["chips"] -= bedrag
