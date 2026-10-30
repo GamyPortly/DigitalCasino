@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Speler {{ speler_id }} - Digital Casino</title>
 <style>
-  body { font-family: Arial, sans-serif; text-align: center; padding: 15px; background: #222; color: white; }
-  .kaart { display: inline-block; width: 55px; height: 75px; border: 1px solid #555; margin: 4px; line-height: 75px; font-size: 1.1em; cursor: pointer; border-radius: 4px; user-select: none; background: #fff; color: #000; font-weight: bold; }
+  body { font-family: Arial, sans-serif; text-align: center; padding: 15px; background: radial-gradient(circle at center, #1b4d3e 0%, #0e2920 100%); color: white; min-height: 100vh; box-sizing: border-box; margin: 0; }
+  .kaart { display: inline-block; width: 55px; height: 75px; border: 1px solid #555; margin: 4px; line-height: 75px; font-size: 1.1em; cursor: pointer; border-radius: 4px; user-select: none; background: #fff; color: #000; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
   .kaart.gekozen { border: 3px solid #e67e22; background: #f39c12; color: white; font-weight: bold; }
-  button { display: block; width: 100%; max-width: 280px; padding: 14px; margin: 8px auto; font-size: 1.1em; border-radius: 6px; border: none; background: #e67e22; color: white; cursor: pointer; }
-  button:disabled { opacity: 0.4; }
+  button { display: block; width: 100%; max-width: 280px; padding: 14px; margin: 8px auto; font-size: 1.1em; border-radius: 6px; border: none; background: #e67e22; color: white; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
   .klein-knop { padding: 8px; font-size: 0.9em; background: #7f8c8d; }
   .menu-knop { background: #c0392b; margin-top: 25px; }
   .raise-zone { max-width: 280px; margin: 0 auto 8px; display: flex; gap: 6px; }
@@ -17,8 +17,8 @@
   .inzet-grid button { flex: 1; margin: 0; padding: 10px; }
   input { width: 90%; max-width: 260px; padding: 10px; font-size: 1em; margin: 8px auto; display: block; border-radius: 4px; border: 1px solid #555; background: #333; color: white; box-sizing: border-box; }
   .handtype { color: #2ecc71; font-weight: bold; }
-  .paard-knop { background: #34495e; margin: 4px auto; }
-  .paard-knop.gekozen { background: #27ae60; font-weight: bold; }
+  .dier-knop { background: #34495e; margin: 4px auto; font-size: 1em; }
+  .dier-knop.gekozen { background: #27ae60; font-weight: bold; border: 2px solid #f1c40f; }
 </style>
 </head>
 <body>
@@ -30,13 +30,13 @@
     <button class="klein-knop" style="width:auto; margin:0;" onclick="veiligAfsluiten()">Afsluiten</button>
   </div>
 
-  <h1>Speler {{ speler_id }}</h1>
+  <h1>Speler {{ speler_id }} {% if speler_id == 1 %}(Host 👑){% endif %}</h1>
 
   <!-- WACHT / KIES SPEL -->
   <div id="wacht_zone" style="display:none;">
     <p id="wachtbericht">Wachten op de andere speler...</p>
     <div id="menu_zone" style="display:none;">
-      <p><b>Kies een spel:</b></p>
+      <p id="menu_titel"><b>Kies een spel:</b></p>
       <div id="spel_knoppen"></div>
     </div>
     <button id="start_knop" style="background:#27ae60; display:none;" onclick="startSpel()">Start Spel</button>
@@ -86,25 +86,25 @@
     </div>
   </div>
 
-  <!-- PAARDENRACE -->
-  <div id="paardenrace_zone" style="display:none;">
-    <h3>Paardenrennen</h3>
-    <div id="pr_inzet_zone" style="display:none;">
-      <p>Kies een paard:</p>
-      <div id="pr_paard_knoppen"></div>
-      <input type="number" id="pr_bedrag" placeholder="bedrag" value="20">
-      <button style="background:#27ae60;" onclick="stuurPaardenraceInzet()">Inzetten</button>
-      <p id="pr_inzet_status" style="color:#f1c40f;"></p>
+  <!-- ANIMAL RACING -->
+  <div id="animalrace_zone" style="display:none;">
+    <h3>Animal Racing 🐾</h3>
+    <div id="ar_inzet_zone" style="display:none;">
+      <p>Kies je dier:</p>
+      <div id="ar_dier_knoppen"></div>
+      <input type="number" id="ar_bedrag" placeholder="bedrag" value="20">
+      <button style="background:#27ae60;" onclick="stuurAnimalraceInzet()">Inzetten</button>
+      <p id="ar_inzet_status" style="color:#f1c40f;"></p>
     </div>
 
-    <div id="pr_race_zone" style="display:none;">
-      <p>Jouw paard: <b id="pr_mijn_paard" style="color:#f1c40f;"></b></p>
-      <p>chips: <b id="pr_chips">0</b> | inzet: <b id="pr_inzet">0</b></p>
+    <div id="ar_race_zone" style="display:none;">
+      <p>Jouw dier: <b id="ar_mijn_dier" style="color:#f1c40f;"></b></p>
+      <p>chips: <b id="ar_chips">0</b> | inzet: <b id="ar_inzet">0</b></p>
       <p>Kijk naar het centrale scherm!</p>
     </div>
 
-    <div id="pr_afgelopen_zone" style="display:none;">
-      <p id="pr_resultaat_tekst" style="color:#f1c40f;"></p>
+    <div id="ar_afgelopen_zone" style="display:none;">
+      <p id="ar_resultaat_tekst" style="color:#f1c40f;"></p>
       <button onclick="volgendeHand()">Volgende race</button>
     </div>
   </div>
@@ -152,6 +152,7 @@
       <input type="number" id="rt_getal" placeholder="Specifiek Getal (0-36)" min="0" max="36">
       <button style="background:#f39c12;" onclick="stuurRouletteGetalInzet()">Inzetten op Getal (36x)</button>
 
+      <p id="rt_fout" style="display:none; background:#c0392b; color:#fff; padding:10px; border-radius:6px; font-weight:bold; margin:10px 0;"></p>
       <p id="rt_inzet_status" style="color:#f1c40f;"></p>
       <button style="background:#27ae60;" onclick="bevestigRouletteKlaar()">Draai het Rad!</button>
     </div>
@@ -227,7 +228,8 @@
 <script>
 const SPELER_ID = Number("{{ speler_id }}");
 let geselecteerdeKaartIndices = [];
-let gekozenPaard = null;
+let gekozenDier = null;
+let rbHandtekening = "";
 
 function kaart_html(kaart) {
   const isRood = kaart.includes("♥") || kaart.includes("♦") || kaart.endsWith("h") || kaart.endsWith("d");
@@ -235,19 +237,30 @@ function kaart_html(kaart) {
 }
 
 async function startSpel() {
+  if (SPELER_ID !== 1) return alert("Alleen de Host (Speler 1) kan het spel starten!");
   const res = await fetch("/start_spel", { method: "POST" });
   const data = await res.json();
   if (!data.ok) alert(data.fout);
 }
 
 async function kiesSpel(spel) {
-  const res = await fetch("/kies_spel", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ spel: spel })
-  });
-  const data = await res.json();
-  if (!data.ok) alert(data.fout);
+  if (SPELER_ID === 1) {
+    const res = await fetch("/kies_spel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ speler: SPELER_ID, spel: spel })
+    });
+    const data = await res.json();
+    if (!data.ok) alert(data.fout);
+  } else {
+    const res = await fetch("/suggereer_spel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ spel: spel })
+    });
+    const data = await res.json();
+    if (data.ok) alert("Suggestie verzonden naar Host!");
+  }
 }
 
 async function terugNaarMenu() {
@@ -308,24 +321,24 @@ async function stuurBlackjackActie(actie) {
   if (!data.ok) alert(data.fout);
 }
 
-/* PAARDENRACE */
-function kiesPaard(i) {
-  gekozenPaard = i;
-  document.querySelectorAll(".paard-knop").forEach(b =>
+/* ANIMAL RACING */
+function kiesDier(i) {
+  gekozenDier = i;
+  document.querySelectorAll(".dier-knop").forEach(b =>
     b.classList.toggle("gekozen", parseInt(b.dataset.index) === i));
 }
 
-async function stuurPaardenraceInzet() {
-  const bedrag = parseInt(document.getElementById("pr_bedrag").value);
-  if (gekozenPaard === null) return alert("Kies eerst een paard!");
+async function stuurAnimalraceInzet() {
+  const bedrag = parseInt(document.getElementById("ar_bedrag").value);
+  if (gekozenDier === null) return alert("Kies eerst een dier!");
   if (!bedrag || bedrag <= 0) return alert("Vul een geldig bedrag in!");
-  const res = await fetch("/paardenrace_inzet", {
+  const res = await fetch("/animalrace_inzet", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ speler: SPELER_ID, paard: gekozenPaard, bedrag: bedrag })
+    body: JSON.stringify({ speler: SPELER_ID, dier: gekozenDier, bedrag: bedrag })
   });
   const data = await res.json();
-  document.getElementById("pr_inzet_status").textContent = data.ok ? "Ingezet, wachten op de andere speler..." : "Fout: " + data.fout;
+  document.getElementById("ar_inzet_status").textContent = data.ok ? "Ingezet, wachten op de andere speler..." : "Fout: " + data.fout;
 }
 
 /* LIAR'S BAR */
@@ -382,7 +395,18 @@ async function stuurRouletteInzet(type, waarde) {
     body: JSON.stringify({ speler: SPELER_ID, type: type, waarde: waarde, bedrag: bedrag })
   });
   const data = await res.json();
-  document.getElementById("rt_inzet_status").textContent = data.ok ? `Inzet geplaatst op ${waarde} (${bedrag} chips)` : "Fout: " + data.fout;
+  const foutEl = document.getElementById("rt_fout");
+  clearTimeout(window.rtFoutTimer);
+  if (data.ok) {
+    foutEl.style.display = "none";
+    document.getElementById("rt_inzet_status").textContent = `Inzet geplaatst op ${waarde} (${bedrag} chips)`;
+  } else {
+    document.getElementById("rt_inzet_status").textContent = "";
+    foutEl.textContent = "⚠️ " + data.fout;
+    foutEl.style.display = "block";
+    window.rtFoutTimer = setTimeout(() => { foutEl.style.display = "none"; }, 6000);
+    alert(data.fout);
+  }
 }
 
 function stuurRouletteGetalInzet() {
@@ -401,7 +425,7 @@ async function bevestigRouletteKlaar() {
 }
 
 /* CRASH */
-let crashSync = null;      // { verstreken, ontvangen, groei, inzet, status, fase, auto }
+let crashSync = null;
 let crashTimers = [];
 
 function crashMultiplier() {
@@ -435,7 +459,7 @@ function crashTik() {
 function zetCrashLus(aan) {
   if (aan && crashTimers.length === 0) {
     crashTimers.push(setInterval(crashTik, 60));
-    crashTimers.push(setInterval(ververs, 250)); // snel pollen zodat de crash op tijd zichtbaar is
+    crashTimers.push(setInterval(ververs, 250));
   } else if (!aan && crashTimers.length) {
     crashTimers.forEach(clearInterval);
     crashTimers = [];
@@ -466,8 +490,6 @@ async function stuurCrashCashout() {
 }
 
 /* RIDE THE BUS */
-let rbHandtekening = "";
-
 async function stuurRidebusInzet() {
   const bedrag = parseInt(document.getElementById("rb_bedrag").value);
   if (!bedrag || bedrag <= 0) return alert("Vul een geldig bedrag in!");
@@ -523,7 +545,7 @@ async function ververs() {
     document.getElementById("wacht_zone").style.display = "none";
     document.getElementById("spel_zone").style.display = "none";
     document.getElementById("blackjack_zone").style.display = "none";
-    document.getElementById("paardenrace_zone").style.display = "none";
+    document.getElementById("animalrace_zone").style.display = "none";
     document.getElementById("liarsbar_zone").style.display = "none";
     document.getElementById("roulette_zone").style.display = "none";
     document.getElementById("ridebus_zone").style.display = "none";
@@ -541,15 +563,29 @@ async function ververs() {
       const menuEl = document.getElementById("menu_zone");
       const knoppenEl = document.getElementById("spel_knoppen");
       const startEl = document.getElementById("start_knop");
+      const menuTitel = document.getElementById("menu_titel");
 
       if (andereVerbonden) {
         menuEl.style.display = "block";
         knoppenEl.innerHTML = "";
+        
+        if (SPELER_ID === 1) {
+          menuTitel.innerHTML = "<b>Kies een spel (Host):</b>";
+          startEl.style.display = data.spel_keuze ? "block" : "none";
+        } else {
+          menuTitel.innerHTML = "<b>Suggestie indienen (Speler 2):</b>" + (data.suggestie_spel ? ` (P2 suggestie: ${data.spellen[data.suggestie_spel].naam})` : "");
+          startEl.style.display = "none";
+        }
+
         for (const [key, spel] of Object.entries(data.spellen)) {
           const gekozen = data.spel_keuze === key;
-          knoppenEl.innerHTML += `<button onclick="kiesSpel('${key}')">${spel.naam} ${gekozen ? '(gekozen)' : ''}</button>`;
+          const gesuggereerd = data.suggestie_spel === key;
+          let extra = "";
+          if (gekozen) extra = " (GEKOZEN)";
+          else if (gesuggereerd) extra = " (P2 suggestie)";
+          
+          knoppenEl.innerHTML += `<button onclick="kiesSpel('${key}')" style="${gekozen ? 'background:#27ae60;' : ''}">${spel.naam}${extra}</button>`;
         }
-        startEl.style.display = data.spel_keuze ? "block" : "none";
       } else {
         menuEl.style.display = "none";
         startEl.style.display = "none";
@@ -592,35 +628,36 @@ async function ververs() {
       return;
     }
 
-    // 3. PAARDENRACE
-    if (data.fase === "paardenrace" && data.paardenrace) {
-      document.getElementById("paardenrace_zone").style.display = "block";
-      const pr = data.paardenrace;
-      const mijnPr = pr.spelers[SPELER_ID];
+    // 3. ANIMAL RACING
+    if (data.fase === "animalrace" && data.animalrace) {
+      document.getElementById("animalrace_zone").style.display = "block";
+      const ar = data.animalrace;
+      const mijnAr = ar.spelers[SPELER_ID];
 
-      if (pr.fase === "inzetten") {
-        document.getElementById("pr_inzet_zone").style.display = "block";
-        document.getElementById("pr_race_zone").style.display = "none";
-        document.getElementById("pr_afgelopen_zone").style.display = "none";
+      if (ar.fase === "inzetten") {
+        document.getElementById("ar_inzet_zone").style.display = "block";
+        document.getElementById("ar_race_zone").style.display = "none";
+        document.getElementById("ar_afgelopen_zone").style.display = "none";
 
-        const knoppenEl = document.getElementById("pr_paard_knoppen");
+        const knoppenEl = document.getElementById("ar_dier_knoppen");
         knoppenEl.innerHTML = "";
-        pr.paarden.forEach((p, idx) => {
-          knoppenEl.innerHTML += `<button class="paard-knop ${gekozenPaard === idx ? 'gekozen' : ''}" data-index="${idx}" onclick="kiesPaard(${idx})">${p}</button>`;
+        ar.dieren.forEach((d, idx) => {
+          knoppenEl.innerHTML += `<button class="dier-knop ${gekozenDier === idx ? 'gekozen' : ''}" data-index="${idx}" onclick="kiesDier(${idx})">${d.emoji} ${d.naam}</button>`;
         });
-      } else if (pr.fase === "racen") {
-        document.getElementById("pr_inzet_zone").style.display = "none";
-        document.getElementById("pr_race_zone").style.display = "block";
-        document.getElementById("pr_afgelopen_zone").style.display = "none";
+      } else if (ar.fase === "racen") {
+        document.getElementById("ar_inzet_zone").style.display = "none";
+        document.getElementById("ar_race_zone").style.display = "block";
+        document.getElementById("ar_afgelopen_zone").style.display = "none";
 
-        document.getElementById("pr_mijn_paard").textContent = pr.paarden[mijnPr.paard] || "-";
-        document.getElementById("pr_chips").textContent = mij.chips;
-        document.getElementById("pr_inzet").textContent = mijnPr.inzet;
-      } else if (pr.fase === "afgelopen") {
-        document.getElementById("pr_inzet_zone").style.display = "none";
-        document.getElementById("pr_race_zone").style.display = "none";
-        document.getElementById("pr_afgelopen_zone").style.display = "block";
-        document.getElementById("pr_resultaat_tekst").textContent = mijnPr.resultaat || "Race afgelopen.";
+        const gekozenObj = ar.dieren[mijnAr.dier];
+        document.getElementById("ar_mijn_dier").textContent = gekozenObj ? `${gekozenObj.emoji} ${gekozenObj.naam}` : "-";
+        document.getElementById("ar_chips").textContent = mij.chips;
+        document.getElementById("ar_inzet").textContent = mijnAr.inzet;
+      } else if (ar.fase === "afgelopen") {
+        document.getElementById("ar_inzet_zone").style.display = "none";
+        document.getElementById("ar_race_zone").style.display = "none";
+        document.getElementById("ar_afgelopen_zone").style.display = "block";
+        document.getElementById("ar_resultaat_tekst").textContent = mijnAr.resultaat || "Race afgelopen.";
       }
       return;
     }
@@ -702,7 +739,6 @@ async function ververs() {
         document.getElementById("rb_kaarten").innerHTML = ridebusKaartenHtml(mijnRb.kaarten);
         document.getElementById("rb_vraag").textContent = `Vraag ${mijnRb.stap + 1}/4: ${mijnRb.vraag.titel}`;
 
-        // Knoppen alleen opnieuw opbouwen als er iets veranderd is (anders gaan klikken verloren)
         const handtekening = `${mijnRb.stap}|${mijnRb.uitbetaal_waarde}`;
         if (handtekening !== rbHandtekening) {
           rbHandtekening = handtekening;
